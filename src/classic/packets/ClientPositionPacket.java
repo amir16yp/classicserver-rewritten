@@ -1,12 +1,14 @@
 package classic.packets;
 
-import java.io.*;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
 
 public class ClientPositionPacket extends Packet {
     private byte playerId;
-    private short x;
-    private short y;
-    private short z;
+    private short x; // Fixed-point (5 bits integer, 5 bits fractional)
+    private short y; // Fixed-point (5 bits integer, 5 bits fractional)
+    private short z; // Fixed-point (5 bits integer, 5 bits fractional)
     private byte yaw;
     private byte pitch;
 
@@ -33,6 +35,26 @@ public class ClientPositionPacket extends Packet {
         z = in.readShort();
         yaw = in.readByte();
         pitch = in.readByte();
+    }
+
+    // Method to set player position using double values
+    public void setPosition(double x, double y, double z) {
+        this.x = (short) (x * 32); // Convert to fixed-point
+        this.y = (short) (y * 32); // Convert to fixed-point
+        this.z = (short) (z * 32); // Convert to fixed-point
+    }
+
+    // Method to get player position as double values
+    public double getXPosition() {
+        return x / 32.0; // Convert from fixed-point
+    }
+
+    public double getYPosition() {
+        return y / 32.0; // Convert from fixed-point
+    }
+
+    public double getZPosition() {
+        return z / 32.0; // Convert from fixed-point
     }
 
     // Getters and setters
