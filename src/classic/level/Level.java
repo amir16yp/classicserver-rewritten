@@ -28,16 +28,16 @@ public class Level {
         return 0; // Return air for out-of-bounds coordinates
     }
 
-    public int getWidth() {
-        return width;
+    public short getWidth() {
+        return (short) width;
     }
 
-    public int getHeight() {
-        return height;
+    public short getHeight() {
+        return (short) height;
     }
 
-    public int getDepth() {
-        return depth;
+    public short getDepth() {
+        return (short) depth;
     }
 
     public byte[] getBlockData() {

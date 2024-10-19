@@ -1,6 +1,5 @@
 package classic;
 
-import classic.level.LevelGenerator;
 import classic.packets.*;
 
 import java.io.*;
@@ -152,20 +151,20 @@ public class ClientHandler implements Runnable {
 
     private void sendLevelFinalize() throws IOException {
         LevelFinalizePacket finalizePacket = new LevelFinalizePacket();
-        finalizePacket.setXSize(LevelGenerator.getWidth());
-        finalizePacket.setYSize(LevelGenerator.getHeight());
-        finalizePacket.setZSize(LevelGenerator.getDepth());
+        finalizePacket.setXSize(MinecraftClassicServer.level.getWidth());
+        finalizePacket.setYSize(MinecraftClassicServer.level.getHeight());
+        finalizePacket.setZSize(MinecraftClassicServer.level.getDepth());
         finalizePacket.write(out);
 
         System.out.println("Level data sent successfully to " + username + ". Dimensions: " +
-                LevelGenerator.getWidth() + "x" + LevelGenerator.getHeight() + "x" + LevelGenerator.getDepth());
+                MinecraftClassicServer.level.getWidth()+ "x" + MinecraftClassicServer.level.getHeight()+ "x" + MinecraftClassicServer.level.getDepth());
     }
 
     // Player spawning methods
     private void spawnPlayer() throws IOException {
-        x = (short) (LevelGenerator.getWidth() / 2 * 32);
-        y = (short) ((LevelGenerator.getHeight() / 2 * 32) + 51);
-        z = (short) (LevelGenerator.getDepth() / 2 * 32);
+        x = (short) (MinecraftClassicServer.level.getWidth() / 2 * 32);
+        y = (short) ((MinecraftClassicServer.level.getHeight() / 2 * 32) + 51);
+        z = (short) (MinecraftClassicServer.level.getDepth() / 2 * 32);
         yaw = 0;
         pitch = 0;
 
@@ -329,15 +328,15 @@ public class ClientHandler implements Runnable {
         int blockY = newY / 32;
         int blockZ = newZ / 32;
 
-        return blockX >= 0 && blockX < LevelGenerator.getWidth() &&
-                blockY >= 0 && blockY < LevelGenerator.getHeight() &&
-                blockZ >= 0 && blockZ < LevelGenerator.getDepth();
+        return blockX >= 0 && blockX < MinecraftClassicServer.level.getWidth() &&
+                blockY >= 0 && blockY < MinecraftClassicServer.level.getHeight() &&
+                blockZ >= 0 && blockZ < MinecraftClassicServer.level.getDepth();
     }
 
     private boolean isValidBlockChange(SetBlockClientPacket packet) {
-        if (packet.getX() < 0 || packet.getX() >= LevelGenerator.getWidth() ||
-                packet.getY() < 0 || packet.getY() >= LevelGenerator.getHeight() ||
-                packet.getZ() < 0 || packet.getZ() >= LevelGenerator.getDepth()) {
+        if (packet.getX() < 0 || packet.getX() >= MinecraftClassicServer.level.getWidth() ||
+                packet.getY() < 0 || packet.getY() >= MinecraftClassicServer.level.getHeight() ||
+                packet.getZ() < 0 || packet.getZ() >= MinecraftClassicServer.level.getDepth()) {
             System.out.println("Invalid block coordinates: " + packet.getX() + ", " + packet.getY() + ", " + packet.getZ());
             return false;
         }
@@ -359,9 +358,10 @@ public class ClientHandler implements Runnable {
         // Add specific checks for each packet type
         if (packet instanceof SetBlockServerPacket) {
             SetBlockServerPacket sbPacket = (SetBlockServerPacket) packet;
-            return sbPacket.getX() >= 0 && sbPacket.getX() < LevelGenerator.getWidth() &&
-                    sbPacket.getY() >= 0 && sbPacket.getY() < LevelGenerator.getHeight() &&
-                    sbPacket.getZ() >= 0 && sbPacket.getZ() < LevelGenerator.getDepth() &&
+            return sbPacket.getX() >= 0 && sbPacket.getX() < MinecraftClassicServer.level.getWidth() &&
+                    sbPacket.getY() >= 0 && sbPacket.getY() < MinecraftClassicServer.level.getHeight() &&
+                    sbPacket.getZ() >= 0 && sbPacket.getZ() < MinecraftClassicServer.level.getDepth() &&
+                    sbPacket.getZ() >= 0 && sbPacket.getZ() < MinecraftClassicServer.level.getDepth() &&
                     sbPacket.getBlockType() >= 0 && sbPacket.getBlockType() <= 49;
         }
         // Add more checks for other packet types

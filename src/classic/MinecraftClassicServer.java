@@ -4,11 +4,13 @@ import classic.level.Level;
 import classic.level.LevelGenerator;
 import classic.packets.DisconnectPlayerPacket;
 
-import java.io.*;
+import java.io.DataOutputStream;
+import java.io.IOException;
 import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryMXBean;
 import java.lang.management.OperatingSystemMXBean;
-import java.net.*;
+import java.net.ServerSocket;
+import java.net.Socket;
 import java.text.DecimalFormat;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -21,8 +23,8 @@ public class MinecraftClassicServer {
     public static final String SERVER_MOTD = "Welcome to a basic Minecraft Classic server!";
     public static final String SERVER_SALT = "your16CharSaltHere"; // Replace with your actual salt
     public static final boolean VERIFY_PLAYERS = false; // Set to true to enable verification
-    public static final int MAX_PLAYERS = 1; // Set your desired maximum player count here
-
+    public static final int MAX_PLAYERS = 20; // Set your desired maximum player count here
+    public static LevelGenerator levelGenerator = new LevelGenerator();
     public static Level level;
 
     private static final Object levelLock = new Object();
@@ -30,7 +32,7 @@ public class MinecraftClassicServer {
     private static final DecimalFormat df = new DecimalFormat("#.##");
 
     static {
-        level = LevelGenerator.generateFlatWorld();
+        level = levelGenerator.generateFlatWorld();
     }
 
     public static byte getBlock(short x, short y, short z) {
@@ -50,7 +52,6 @@ public class MinecraftClassicServer {
         System.out.println("Minecraft Classic server running on port " + PORT);
         System.out.println("Player verification is " + (VERIFY_PLAYERS ? "enabled" : "disabled"));
         System.out.println("Maximum players: " + MAX_PLAYERS);
-
         // Start the metrics reporting task
         startMetricsReporting();
 

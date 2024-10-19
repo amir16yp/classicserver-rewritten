@@ -3,8 +3,6 @@ package classic.api;
 import classic.ClientHandler;
 import classic.MinecraftClassicServer;
 import classic.packets.MessagePacket;
-import classic.packets.SetBlockServerPacket;
-import classic.level.LevelGenerator;
 
 import java.io.IOException;
 
@@ -57,9 +55,9 @@ public class Player {
     }
 
     private boolean isValidBlockPosition(int x, int y, int z) {
-        return x >= 0 && x < LevelGenerator.getWidth() &&
-                y >= 0 && y < LevelGenerator.getHeight() &&
-                z >= 0 && z < LevelGenerator.getDepth();
+        return x >= 0 && x < MinecraftClassicServer.levelGenerator.getWidth() &&
+                y >= 0 && y < MinecraftClassicServer.levelGenerator.getHeight() &&
+                z >= 0 && z < MinecraftClassicServer.levelGenerator.getDepth();
     }
 
     private boolean isValidBlockType(byte blockType) {

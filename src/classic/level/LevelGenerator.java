@@ -6,25 +6,27 @@ import java.io.IOException;
 import java.util.zip.GZIPOutputStream;
 
 public class LevelGenerator {
-    public static final short WIDTH = 256;
-    public static final short HEIGHT = 64;
-    public static final short DEPTH = 256;
+    protected short width = 256;
+    protected short height = 64;
+    protected short depth = 256;
 
-    public static Level generateFlatWorld() {
-        Level level = new Level(WIDTH, HEIGHT, DEPTH);
+    public LevelGenerator() {
+        // Default constructor
+    }
 
-        for (int y = 0; y < HEIGHT; y++) {
-            for (int z = 0; z < DEPTH; z++) {
-                for (int x = 0; x < WIDTH; x++) {
-                    if (y == 0) {
-                        level.setBlock(x, y, z, (byte) 7); // Bedrock
-                    } else if (y < 32) {
-                        level.setBlock(x, y, z, (byte) 3); // Dirt
-                    } else if (y == 32) {
-                        level.setBlock(x, y, z, (byte) 2); // Grass
-                    } else {
-                        level.setBlock(x, y, z, (byte) 0); // Air
-                    }
+    public LevelGenerator(short width, short height, short depth) {
+        this.width = width;
+        this.height = height;
+        this.depth = depth;
+    }
+
+    public Level generateFlatWorld() {
+        Level level = new Level(width, height, depth);
+
+        for (int y = 0; y < height; y++) {
+            for (int z = 0; z < depth; z++) {
+                for (int x = 0; x < width; x++) {
+                    level.setBlock(x, y, z, getBlockType(x, y, z));
                 }
             }
         }
@@ -32,7 +34,19 @@ public class LevelGenerator {
         return level;
     }
 
-    public static byte[] compressLevelData(Level level) throws IOException {
+    protected byte getBlockType(int x, int y, int z) {
+        if (y == 0) {
+            return 7; // Bedrock
+        } else if (y < height / 2) {
+            return 3; // Dirt
+        } else if (y == height / 2) {
+            return 2; // Grass
+        } else {
+            return 0; // Air
+        }
+    }
+
+    public byte[] compressLevelData(Level level) throws IOException {
         byte[] rawData = level.getBlockData();
 
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -50,16 +64,27 @@ public class LevelGenerator {
         return compressedBaos.toByteArray();
     }
 
-    public static short getWidth()
-    {
-        return WIDTH;
+    public short getWidth() {
+        return width;
     }
 
-    public static short getHeight() {
-        return HEIGHT;
+    public short getHeight() {
+        return height;
     }
 
-    public static short getDepth() {
-        return DEPTH;
+    public short getDepth() {
+        return depth;
+    }
+
+    public void setWidth(short width) {
+        this.width = width;
+    }
+
+    public void setHeight(short height) {
+        this.height = height;
+    }
+
+    public void setDepth(short depth) {
+        this.depth = depth;
     }
 }

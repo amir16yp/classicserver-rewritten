@@ -1,6 +1,8 @@
 package classic.packets;
 
-import java.io.*;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
 
 public class ServerPositionPacket extends Packet {
     private byte playerId;
