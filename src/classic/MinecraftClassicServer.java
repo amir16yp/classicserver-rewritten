@@ -31,6 +31,9 @@ public class MinecraftClassicServer {
     private final Timer autoSaveTimer;
     private boolean isRunning;
 
+    private PlayerList banList = new PlayerList("ban", "banlist.txt");
+    private PlayerList opList = new PlayerList("admin", "oplist.txt");
+
     public MinecraftClassicServer(int port) throws IOException {
         this.port = port;
         this.protocolVersion = 0x07;
@@ -62,37 +65,49 @@ public class MinecraftClassicServer {
         commandThread.start();
     }
 
-    private void handleCommand(String command) {
+    public String handleCommand(String command) {
         String[] parts = command.split("\\s+");
         String cmd = parts[0].toLowerCase();
 
+        String response = "";
+
         switch (cmd) {
             case "stop":
-                System.out.println("Stopping server...");
                 stop();
                 break;
             case "save":
-                System.out.println("Manually saving level...");
+                response = "Manually saving level...";
                 saveLevel();
                 break;
             case "players":
-                System.out.println("Current players: " + ClientHandler.getClientCount() + "/" + maxPlayers);
+                response = "Current players: " + ClientHandler.getClientCount() + "/" + maxPlayers;
                 break;
-            case "help":
-                printHelp();
+            case "op":
+                String toOP = parts[1];
+                if (toOP != null)
+                {
+                    this.getOpList().add(toOP.toLowerCase());
+                    response = "added " + toOP.toLowerCase() + " to OP list";
+                } else {
+                    response = " must specify OP name";
+                }
+                break;
+            case "deop":
+                String toDEOP = parts[1];
+                if (toDEOP != null)
+                {
+                    this.getOpList().remove(toDEOP.toLowerCase());
+                    response = "removed " + toDEOP.toLowerCase() + " from op list";
+                } else {
+                    response = " must specify OP name";
+                }
                 break;
             default:
-                System.out.println("Unknown command. Type 'help' for available commands.");
+                response = "Unknown command. Type 'help' for available commands.";
                 break;
         }
-    }
-
-    private void printHelp() {
-        System.out.println("Available commands:");
-        System.out.println("  help    - Show this help message");
-        System.out.println("  stop    - Stop the server");
-        System.out.println("  save    - Save the level immediately");
-        System.out.println("  players - Show current player count");
+        System.out.println(response);
+        return response;
     }
 
     public void start() {
@@ -121,8 +136,6 @@ public class MinecraftClassicServer {
         }
     }
 
-    // ... rest of the existing methods remain the same ...
-
     private Level loadOrGenerateLevel() {
         Path levelPath = Paths.get(LEVEL_FILE);
         if (Files.exists(levelPath)) {
@@ -134,7 +147,7 @@ public class MinecraftClassicServer {
                 System.out.println("Generating new level instead...");
             }
         }
-        return new LevelGenerator().generateFlatWorld();
+        return new LevelGenerator((short) 1024, (short) 64, (short) 1024    ).generateFlatWorld();
     }
 
     private void setupAutoSave() {
@@ -158,6 +171,7 @@ public class MinecraftClassicServer {
     }
 
     public void stop() {
+        System.out.println("Stopping...");
         isRunning = false;
         autoSaveTimer.cancel();
 
@@ -226,5 +240,13 @@ public class MinecraftClassicServer {
     public static void main(String[] args) throws IOException {
         MinecraftClassicServer server = new MinecraftClassicServer(25565);
         server.start();
+    }
+
+    public PlayerList getBanList() {
+        return banList;
+    }
+
+    public PlayerList getOpList() {
+        return opList;
     }
 }
