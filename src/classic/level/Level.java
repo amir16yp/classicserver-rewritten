@@ -1,5 +1,9 @@
 package classic.level;
 
+import java.io.*;
+import java.util.zip.*;
+import java.nio.file.*;
+
 public class Level {
     private final byte[][][] blocks;
     private final int width;
@@ -20,12 +24,10 @@ public class Level {
     }
 
     public byte getBlock(short x, short y, short z) {
-        // Implement this method to return the block type at the given coordinates
-        // Make sure to handle out-of-bounds coordinates
         if (x >= 0 && x < width && y >= 0 && y < height && z >= 0 && z < depth) {
             return blocks[x][y][z];
         }
-        return 0; // Return air for out-of-bounds coordinates
+        return 0;
     }
 
     public short getWidth() {
@@ -61,6 +63,46 @@ public class Level {
                     blocks[x][y][z] = data[index++];
                 }
             }
+        }
+    }
+
+    public void saveToFile(String filename) throws IOException {
+        try (DataOutputStream dos = new DataOutputStream(
+                new GZIPOutputStream(
+                        new BufferedOutputStream(
+                                new FileOutputStream(filename))))) {
+
+            // Write dimensions
+            dos.writeShort(width);
+            dos.writeShort(height);
+            dos.writeShort(depth);
+
+            // Write block data
+            byte[] data = getBlockData();
+            dos.write(data);
+        }
+    }
+
+    public static Level loadFromFile(String filename) throws IOException {
+        try (DataInputStream dis = new DataInputStream(
+                new GZIPInputStream(
+                        new BufferedInputStream(
+                                new FileInputStream(filename))))) {
+
+            // Read dimensions
+            int width = dis.readShort() & 0xFFFF;  // Convert to unsigned
+            int height = dis.readShort() & 0xFFFF;
+            int depth = dis.readShort() & 0xFFFF;
+
+            // Create new level
+            Level level = new Level(width, height, depth);
+
+            // Read block data
+            byte[] data = new byte[width * height * depth];
+            dis.readFully(data);
+
+            level.setBlockData(data);
+            return level;
         }
     }
 }

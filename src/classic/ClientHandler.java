@@ -303,7 +303,7 @@ public class ClientHandler implements Runnable {
 
         MessagePacket broadcastPacket = new MessagePacket();
         broadcastPacket.setPlayerId(playerId);
-        broadcastPacket.setMessage(username + ": " + packet.getMessage());
+        broadcastPacket.setMessage(username + ":" + packet.getMessage());
 
         for (ClientHandler client : clients.values()) {
             broadcastPacket.write(client.out);
