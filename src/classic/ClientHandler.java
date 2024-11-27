@@ -1,20 +1,23 @@
 package classic;
 
+import classic.api.API;
+import classic.api.ChatColors;
+import classic.api.Player;
+import classic.level.Level;
 import classic.packets.*;
-
 import java.io.*;
 import java.net.Socket;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.zip.GZIPOutputStream;
 
 public class ClientHandler implements Runnable {
-    // Constants
-    private static final byte EXPECTED_PROTOCOL_VERSION = 7;
-
-    // Client-specific fields
+    private static final ConcurrentHashMap<Byte, ClientHandler> clients = new ConcurrentHashMap<>();
+    private static byte nextPlayerId = 0;
     private final Socket socket;
+    private final MinecraftClassicServer server;
     private DataInputStream in;
     private DataOutputStream out;
     private String username;
@@ -22,22 +25,26 @@ public class ClientHandler implements Runnable {
     private short x, y, z;
     private byte yaw, pitch;
 
-    // Shared resources
-    private static final Map<Byte, ClientHandler> clients = new ConcurrentHashMap<>();
-    private static byte nextPlayerId = 0;
+    public Socket getSocket() {
+        return socket;
+    }
 
-    // Constructor
-    public ClientHandler(Socket socket) {
+    public ClientHandler(Socket socket, MinecraftClassicServer server) {
         this.socket = socket;
+        this.server = server;
         this.playerId = getNextPlayerId();
         System.out.println("New client connected. Assigned player ID: " + playerId);
     }
 
     public static int getClientCount() {
-        return clients.size();
+        return clients.values().size();
     }
 
-    // Main run method
+    public static Collection<ClientHandler> getClients()
+    {
+        return clients.values();
+    }
+
     @Override
     public void run() {
         try {
@@ -52,13 +59,11 @@ public class ClientHandler implements Runnable {
         } catch (IOException e) {
             System.out.println("Error handling client: " + e.getMessage());
             e.printStackTrace();
-            MinecraftClassicServer.playerDisconnected(this.socket);
         } finally {
             disconnectPlayer("Connection closed");
         }
     }
 
-    // Setup and initialization methods
     private void setupStreams() throws IOException {
         in = new DataInputStream(socket.getInputStream());
         out = new DataOutputStream(socket.getOutputStream());
@@ -67,7 +72,6 @@ public class ClientHandler implements Runnable {
     private boolean handlePlayerIdentification() throws IOException {
         byte firstPacketId = in.readByte();
         if (firstPacketId != PacketType.PLAYER_IDENTIFICATION.getId()) {
-            System.out.println("Unexpected first packet: " + firstPacketId);
             disconnectPlayer("Invalid initial packet");
             return false;
         }
@@ -75,35 +79,27 @@ public class ClientHandler implements Runnable {
         PlayerIdentificationPacket packet = new PlayerIdentificationPacket();
         packet.read(in);
 
-        System.out.println("Player identification received for: " + packet.getUsername() +
-                " (Protocol version: " + packet.getProtocolVersion() + ")");
-
-        if (packet.getProtocolVersion() != EXPECTED_PROTOCOL_VERSION) {
-            System.out.println("Protocol version mismatch. Expected: " + EXPECTED_PROTOCOL_VERSION +
-                    ", Received: " + packet.getProtocolVersion());
+        if (packet.getProtocolVersion() != server.getProtocolVersion()) {
             disconnectPlayer("Incompatible protocol version");
             return false;
         }
 
-        this.username = packet.getUsername();
+        username = packet.getUsername();
         sendServerIdentification();
         return true;
     }
 
     private void sendServerIdentification() throws IOException {
         ServerIdentificationPacket response = new ServerIdentificationPacket();
-        response.setProtocolVersion(EXPECTED_PROTOCOL_VERSION);
-        response.setServerName(MinecraftClassicServer.SERVER_NAME);
-        response.setServerMOTD(MinecraftClassicServer.SERVER_MOTD);
-        response.setUserType((byte) 0x00); // Set to 0x64 for op, 0x00 for normal user
+        response.setProtocolVersion(server.getProtocolVersion());
+        response.setServerName(server.getServerName());
+        response.setServerMOTD(server.getServerMotd());
+        response.setUserType((byte) 0x00);
         response.write(out);
         out.flush();
-        System.out.println("Sent server identification to " + username);
     }
 
-    // Level data methods
     private void sendLevelData() throws IOException {
-        System.out.println("Sending level data to " + username + "...");
         sendLevelInitialize();
         sendCompressedLevelData();
         sendLevelFinalize();
@@ -114,9 +110,8 @@ public class ClientHandler implements Runnable {
     }
 
     private void sendCompressedLevelData() throws IOException {
-        byte[] levelData = MinecraftClassicServer.level.getBlockData();
+        byte[] levelData = server.getLevel().getBlockData();
         byte[] compressedData = compressLevelData(levelData);
-
         int chunkSize = 1024;
         int totalChunks = (compressedData.length + chunkSize - 1) / chunkSize;
 
@@ -129,9 +124,6 @@ public class ClientHandler implements Runnable {
             chunkPacket.setChunkData(chunkData);
             chunkPacket.setPercentComplete((byte) ((chunkIndex + 1) * 100 / totalChunks));
             chunkPacket.write(out);
-
-            System.out.println("Sent chunk " + (chunkIndex + 1) + " of " + totalChunks +
-                    " (" + chunkPacket.getPercentComplete() + "% complete) to " + username);
         }
     }
 
@@ -148,23 +140,25 @@ public class ClientHandler implements Runnable {
         }
         return compressedBaos.toByteArray();
     }
-
     private void sendLevelFinalize() throws IOException {
         LevelFinalizePacket finalizePacket = new LevelFinalizePacket();
-        finalizePacket.setXSize(MinecraftClassicServer.level.getWidth());
-        finalizePacket.setYSize(MinecraftClassicServer.level.getHeight());
-        finalizePacket.setZSize(MinecraftClassicServer.level.getDepth());
+
+        Level level = this.server.getLevel();
+
+        finalizePacket.setXSize(level.getWidth());
+        finalizePacket.setYSize(level.getHeight());
+        finalizePacket.setZSize(level.getDepth());
         finalizePacket.write(out);
 
         System.out.println("Level data sent successfully to " + username + ". Dimensions: " +
-                MinecraftClassicServer.level.getWidth()+ "x" + MinecraftClassicServer.level.getHeight()+ "x" + MinecraftClassicServer.level.getDepth());
+                level.getWidth()+ "x" + level.getHeight()+ "x" + level.getDepth());
     }
 
     // Player spawning methods
     private void spawnPlayer() throws IOException {
-        x = (short) (MinecraftClassicServer.level.getWidth() / 2 * 32);
-        y = (short) ((MinecraftClassicServer.level.getHeight() / 2 * 32) + 51);
-        z = (short) (MinecraftClassicServer.level.getDepth() / 2 * 32);
+        x = (short) (this.server.getLevel().getWidth() / 2 * 32);
+        y = (short) ((this.server.getLevel().getHeight() / 2 * 32) + 51);
+        z = (short) (this.server.getLevel().getDepth() / 2 * 32);
         yaw = 0;
         pitch = 0;
 
@@ -328,15 +322,15 @@ public class ClientHandler implements Runnable {
         int blockY = newY / 32;
         int blockZ = newZ / 32;
 
-        return blockX >= 0 && blockX < MinecraftClassicServer.level.getWidth() &&
-                blockY >= 0 && blockY < MinecraftClassicServer.level.getHeight() &&
-                blockZ >= 0 && blockZ < MinecraftClassicServer.level.getDepth();
+        return blockX >= 0 && blockX < this.server.getLevel().getWidth() &&
+                blockY >= 0 && blockY < this.server.getLevel().getHeight() &&
+                blockZ >= 0 && blockZ < this.server.getLevel().getDepth();
     }
 
     private boolean isValidBlockChange(SetBlockClientPacket packet) {
-        if (packet.getX() < 0 || packet.getX() >= MinecraftClassicServer.level.getWidth() ||
-                packet.getY() < 0 || packet.getY() >= MinecraftClassicServer.level.getHeight() ||
-                packet.getZ() < 0 || packet.getZ() >= MinecraftClassicServer.level.getDepth()) {
+        if (packet.getX() < 0 || packet.getX() >= this.server.getLevel().getWidth() ||
+                packet.getY() < 0 || packet.getY() >= this.server.getLevel().getHeight() ||
+                packet.getZ() < 0 || packet.getZ() >= this.server.getLevel().getDepth()) {
             System.out.println("Invalid block coordinates: " + packet.getX() + ", " + packet.getY() + ", " + packet.getZ());
             return false;
         }
@@ -354,19 +348,6 @@ public class ClientHandler implements Runnable {
         return true;
     }
 
-    private boolean isValidPacket(Packet packet) {
-        // Add specific checks for each packet type
-        if (packet instanceof SetBlockServerPacket) {
-            SetBlockServerPacket sbPacket = (SetBlockServerPacket) packet;
-            return sbPacket.getX() >= 0 && sbPacket.getX() < MinecraftClassicServer.level.getWidth() &&
-                    sbPacket.getY() >= 0 && sbPacket.getY() < MinecraftClassicServer.level.getHeight() &&
-                    sbPacket.getZ() >= 0 && sbPacket.getZ() < MinecraftClassicServer.level.getDepth() &&
-                    sbPacket.getZ() >= 0 && sbPacket.getZ() < MinecraftClassicServer.level.getDepth() &&
-                    sbPacket.getBlockType() >= 0 && sbPacket.getBlockType() <= 49;
-        }
-        // Add more checks for other packet types
-        return true;
-    }
     // Disconnection and cleanup
     public void disconnectPlayer(String reason) {
         System.out.println("Disconnecting player: " + (username != null ? username : "unknown") + " (Reason: " + reason + ")");
@@ -417,17 +398,17 @@ public class ClientHandler implements Runnable {
             //System.out.println("Received SET_BLOCK from " + username + ": " + packet);
 
             if (isValidBlockChange(packet)) {
-                byte currentBlockType = MinecraftClassicServer.getBlock(packet.getX(), packet.getY(), packet.getZ());
+                byte currentBlockType = this.server.getBlock(packet.getX(), packet.getY(), packet.getZ());
 
                 if (packet.getMode() == 0x00) {  // Destroy block
-                    MinecraftClassicServer.setBlock(packet.getX(), packet.getY(), packet.getZ(), (byte) 0);
+                    this.server.setBlock(packet.getX(), packet.getY(), packet.getZ(), (byte) 0);
                     broadcastBlockChange(packet.getX(), packet.getY(), packet.getZ(), (byte) 0);
                 } else if (packet.getMode() == 0x01) {  // Create block
-                    MinecraftClassicServer.setBlock(packet.getX(), packet.getY(), packet.getZ(), packet.getBlockType());
+                    this.server.setBlock(packet.getX(), packet.getY(), packet.getZ(), packet.getBlockType());
                     broadcastBlockChange(packet.getX(), packet.getY(), packet.getZ(), packet.getBlockType());
                 }
             } else {
-                byte currentBlockType = MinecraftClassicServer.getBlock(packet.getX(), packet.getY(), packet.getZ());
+                byte currentBlockType = this.server.getBlock(packet.getX(), packet.getY(), packet.getZ());
                 sendBlockCorrection(packet.getX(), packet.getY(), packet.getZ(), currentBlockType);
             }
         } catch (IOException e) {
