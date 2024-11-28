@@ -42,7 +42,7 @@ public class Player implements CommandSender {
             packet.setMessage(chunk);
             packet.setPlayerId((byte) -1);
             try {
-                packet.write(handle.getOutputStream());
+                handle.sendPacket(packet);
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }

@@ -5,6 +5,7 @@ import classic.api.BlockType;
 import classic.api.Player;
 import classic.level.Level;
 import classic.packets.*;
+import com.sun.org.apache.xml.internal.resolver.readers.ExtendedXMLCatalogReader;
 
 import java.io.*;
 import java.net.Socket;
@@ -53,6 +54,28 @@ public class ClientHandler implements Runnable {
         return null;
     }
 
+
+    private final Object writeLock = new Object();
+    private final Object readLock = new Object();
+    public void sendPacket(Packet packet) throws IOException {
+        synchronized (writeLock) {
+            packet.write(out);
+            out.flush();
+        }
+    }
+
+    public void readPacket(Packet packet) throws IOException {
+        synchronized (readLock) {
+            packet.read(in);
+        }
+    }
+
+    public byte readPacketId() throws IOException {
+        synchronized (readLock) {
+            return in.readByte();
+        }
+    }
+
     public ClientHandler(Socket socket, MinecraftClassicServer server) {
         this.socket = socket;
         this.server = server;
@@ -94,14 +117,14 @@ public class ClientHandler implements Runnable {
     }
 
     private boolean handlePlayerIdentification() throws IOException {
-        byte firstPacketId = in.readByte();
+        byte firstPacketId = readPacketId();
         if (firstPacketId != PacketType.PLAYER_IDENTIFICATION.getId()) {
             disconnectPlayer("Invalid initial packet");
             return false;
         }
 
         PlayerIdentificationPacket packet = new PlayerIdentificationPacket();
-        packet.read(in);
+        readPacket(packet);
 
         if (packet.getProtocolVersion() != server.getProtocolVersion()) {
             disconnectPlayer("Incompatible protocol version");
@@ -109,16 +132,20 @@ public class ClientHandler implements Runnable {
         }
 
         username = packet.getUsername();
-        if (this.server.isVerifyPlayers())
-        {
-            if (!this.server.verifyPlayer(username, packet.getVerificationKey()))
-            {
+
+        // Check for existing player with same name
+        if (getByNameCaseInsensitive(username) != null) {
+            disconnectPlayer("A player with that name is already online!");
+            return false;
+        }
+
+        if (this.server.isVerifyPlayers()) {
+            if (!this.server.verifyPlayer(username, packet.getVerificationKey())) {
                 disconnectPlayer("Name verification failed!");
                 return false;
             }
         }
-        if (this.server.getBanList().contains(username))
-        {
+        if (this.server.getBanList().contains(username)) {
             disconnectPlayer("You are banned!");
             return false;
         }
@@ -126,20 +153,20 @@ public class ClientHandler implements Runnable {
         return true;
     }
 
+
     private void sendServerIdentification() throws IOException {
         ServerIdentificationPacket response = new ServerIdentificationPacket();
         response.setProtocolVersion(server.getProtocolVersion());
         response.setServerName(server.getServerName());
         response.setServerMOTD(server.getServerMotd());
-        if (Player.getInstance(this).isOP())
-        {
+        if (Player.getInstance(this).isOP()) {
             response.setUserType((byte) 0x64);
         } else {
             response.setUserType((byte) 0x00);
         }
-        response.write(out);
-        out.flush();
+        sendPacket(response);
     }
+
 
     private void sendLevelData() throws IOException {
         sendLevelInitialize();
@@ -148,7 +175,7 @@ public class ClientHandler implements Runnable {
     }
 
     private void sendLevelInitialize() throws IOException {
-        new LevelInitializePacket().write(out);
+        sendPacket(new LevelInitializePacket());
     }
 
     private void sendCompressedLevelData() throws IOException {
@@ -165,7 +192,7 @@ public class ClientHandler implements Runnable {
             System.arraycopy(compressedData, i, chunkData, 0, remainingBytes);
             chunkPacket.setChunkData(chunkData);
             chunkPacket.setPercentComplete((byte) ((chunkIndex + 1) * 100 / totalChunks));
-            chunkPacket.write(out);
+            sendPacket(chunkPacket);
         }
     }
 
@@ -190,10 +217,15 @@ public class ClientHandler implements Runnable {
         finalizePacket.setXSize(level.getWidth());
         finalizePacket.setYSize(level.getHeight());
         finalizePacket.setZSize(level.getDepth());
-        finalizePacket.write(out);
+        try {
+            sendPacket(finalizePacket);
+            System.out.println("Level data sent successfully to " + username + ". Dimensions: " +
+                    level.getWidth()+ "x" + level.getHeight()+ "x" + level.getDepth());
+        } catch (Exception e)
+        {
+            e.printStackTrace();
+        }
 
-        System.out.println("Level data sent successfully to " + username + ". Dimensions: " +
-                level.getWidth()+ "x" + level.getHeight()+ "x" + level.getDepth());
     }
 
     // Player spawning methods
@@ -212,7 +244,7 @@ public class ClientHandler implements Runnable {
         spawnPacket.setZ(z);
         spawnPacket.setYaw(yaw);
         spawnPacket.setPitch(pitch);
-        spawnPacket.write(out);
+        sendPacket(spawnPacket);
 
         ServerPositionPacket positionPacket = new ServerPositionPacket();
         positionPacket.setPlayerId((byte) -1);
@@ -221,7 +253,7 @@ public class ClientHandler implements Runnable {
         positionPacket.setZ(z);
         positionPacket.setYaw(yaw);
         positionPacket.setPitch(pitch);
-        positionPacket.write(out);
+        sendPacket(positionPacket);
 
         //System.out.println("Spawned player " + username + " (ID: " + playerId + ") at x=" + (x/32.0) + ", y=" + (y/32.0) + ", z=" + (z/32.0));
     }
@@ -244,16 +276,15 @@ public class ClientHandler implements Runnable {
         spawnPacket.setZ(playerToSpawn.z);
         spawnPacket.setYaw(playerToSpawn.yaw);
         spawnPacket.setPitch(playerToSpawn.pitch);
-        spawnPacket.write(receiver.out);
+        receiver.sendPacket(spawnPacket);
         //System.out.println("Sent spawn packet for " + playerToSpawn.username + " (ID: " + playerToSpawn.playerId + ") to " + receiver.username + " (ID: " + receiver.playerId + ")");
     }
 
-    // Game loop and packet handling
     private void gameLoop() {
         System.out.println("Entering game loop for player: " + username);
         try {
             while (socket.isConnected()) {
-                byte packetId = in.readByte();
+                byte packetId = readPacketId();
                 PacketType packetType = PacketType.fromId(packetId);
 
                 switch (packetType) {
@@ -284,10 +315,7 @@ public class ClientHandler implements Runnable {
 
     private void handleClientPosition() throws IOException {
         ClientPositionPacket packet = new ClientPositionPacket();
-        packet.read(in);
-
-        //System.out.println("Received position update from " + username +
-//                ": x=" + packet.getX() + ", y=" + packet.getY() + ", z=" + packet.getZ());
+        readPacket(packet);
 
         if (isValidPosition(packet.getX(), packet.getY(), packet.getZ())) {
             updatePlayerPosition(packet);
@@ -296,6 +324,7 @@ public class ClientHandler implements Runnable {
             sendPositionCorrection();
         }
     }
+
 
     private void updatePlayerPosition(ClientPositionPacket packet) {
         x = packet.getX();
@@ -340,9 +369,8 @@ public class ClientHandler implements Runnable {
 
     private void handleMessage() throws IOException {
         MessagePacket packet = new MessagePacket();
-        packet.read(in);
-        if (packet.getMessage().startsWith("/"))
-        {
+        readPacket(packet);
+        if (packet.getMessage().startsWith("/")) {
             API.getInstance().getCommandRegistry().executeCommand(Player.getInstance(this), packet.getMessage().substring(1));
             return;
         }
@@ -352,7 +380,7 @@ public class ClientHandler implements Runnable {
         broadcastPacket.setMessage(username + ":" + packet.getMessage());
 
         for (ClientHandler client : clients.values()) {
-            broadcastPacket.write(client.out);
+            client.sendPacket(broadcastPacket);
         }
     }
 
@@ -387,9 +415,13 @@ public class ClientHandler implements Runnable {
         }
 
         BlockType blockType = packet.getBlockType();
-        if (blockType == null || blockType == BlockType.BEDROCK)
+        if (blockType == null)
         {
             return false;
+        }
+        if (blockType == BlockType.BEDROCK && packet.getMode().isDestroy())
+        {
+            return Player.getInstance(this).isOP(); // allow only OPs to destroy bedrock
         }
         return true;
     }
@@ -402,8 +434,7 @@ public class ClientHandler implements Runnable {
             {
                 DisconnectPlayerPacket disconnectPacket = new DisconnectPlayerPacket();
                 disconnectPacket.setReason(reason);
-                disconnectPacket.write(out);
-                out.flush();
+                sendPacket(disconnectPacket);
                 socket.close();
             }
         } catch (IOException e) {
@@ -428,7 +459,8 @@ public class ClientHandler implements Runnable {
         for (ClientHandler client : new ArrayList<>(clients.values())) {
             if (client != this && client.socket.isConnected()) {
                 try {
-                    despawnPacket.write(client.out);
+                    client.sendPacket(despawnPacket);
+                    //despawnPacket.write(client.out);
                     //System.out.println("Sent despawn packet for " + username + " (ID: " + playerId + ") to " + client.username + " (ID: " + client.playerId + ")");
                 } catch (IOException e) {
                     System.out.println("Failed to send despawn packet to " + client.username + ": " + e.getMessage());
@@ -440,8 +472,7 @@ public class ClientHandler implements Runnable {
     private void handleSetBlock() {
         try {
             SetBlockClientPacket packet = new SetBlockClientPacket();
-            packet.read(in);
-
+            readPacket(packet);
             if (isValidBlockChange(packet)) {
                 BlockType currentBlockType = this.server.getBlock(packet.getX(), packet.getY(), packet.getZ());
 
@@ -465,7 +496,6 @@ public class ClientHandler implements Runnable {
         }
     }
 
-
     public void broadcastBlockChange(short x, short y, short z, BlockType blockType) {
         SetBlockServerPacket broadcastPacket = new SetBlockServerPacket();
         broadcastPacket.setX(x);
@@ -475,9 +505,7 @@ public class ClientHandler implements Runnable {
 
         for (ClientHandler client : new ArrayList<>(clients.values())) {
             try {
-                broadcastPacket.write(client.out);
-                client.out.flush();
-                //System.out.println("Sent SET_BLOCK to " + client.username + ": x=" + x + ", y=" + y + ", z=" + z + ", blockType=" + blockType);
+                client.sendPacket(broadcastPacket);
             } catch (IOException e) {
                 System.out.println("Failed to send SET_BLOCK to " + client.username + ": " + e.getMessage());
             }
@@ -491,14 +519,13 @@ public class ClientHandler implements Runnable {
             correctionPacket.setY(y);
             correctionPacket.setZ(z);
             correctionPacket.setBlockType(blockType.getId());
-            correctionPacket.write(out);
-            out.flush();
-            //System.out.println("Sent block correction to " + username + ": " + correctionPacket);
+            sendPacket(correctionPacket);
         } catch (IOException e) {
             System.out.println("Error sending block correction to " + username + ": " + e.getMessage());
             e.printStackTrace();
         }
     }
+
     // Getters (if needed for external access)
     public String getUsername() {
         return username;
@@ -526,10 +553,6 @@ public class ClientHandler implements Runnable {
 
     public byte getPitch() {
         return pitch;
-    }
-
-    public DataOutputStream getOutputStream() {
-        return out;
     }
 
     public DataInputStream getInputStream() {

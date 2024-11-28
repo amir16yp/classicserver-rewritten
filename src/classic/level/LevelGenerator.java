@@ -1,5 +1,7 @@
 package classic.level;
 
+import classic.api.BlockType;
+
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -34,18 +36,16 @@ public class LevelGenerator {
         return level;
     }
 
-    protected byte getBlockType(int x, int y, int z) {
+    protected BlockType getBlockType(int x, int y, int z) {
         if (y == 0) {
-            return 7; // Bedrock
-        } else if (y < height / 2) {
-            return 3; // Dirt
-        } else if (y == height / 2) {
-            return 2; // Grass
+            return BlockType.BEDROCK; // Bedrock
+        } else if (y == 1)
+        {
+            return BlockType.GRASS_BLOCK;
         } else {
-            return 0; // Air
+            return BlockType.AIR;
         }
     }
-
     public byte[] compressLevelData(Level level) throws IOException {
         byte[] rawData = level.getBlockData();
 
