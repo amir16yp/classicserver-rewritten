@@ -1,6 +1,8 @@
 package classic;
 
 import classic.api.API;
+import classic.api.CommandSender;
+import classic.api.ConsoleCommandSender;
 import classic.level.Level;
 import classic.level.LevelGenerator;
 import classic.packets.DisconnectPlayerPacket;
@@ -18,44 +20,53 @@ import java.util.Scanner;
 public class MinecraftClassicServer {
     private static final String LEVEL_FILE = "world.dat";
     private static final long SAVE_INTERVAL = 5 * 60 * 1000; // 5 minutes in milliseconds
-
+    public static boolean ENABLE_HEARTBEAT = true;  // Static flag to control heartbeat
+    private boolean verifyPlayers = true;      // Static flag to control name verification
     private final int port;
     private final byte protocolVersion;
     private final String serverName;
     private final String serverMotd;
-    private final boolean verifyPlayers;
     private final int maxPlayers;
     private final Level level;
     private final ServerSocket serverSocket;
     private final Object levelLock;
     private final Timer autoSaveTimer;
     private boolean isRunning;
-
+    private HeartbeatManager heartbeatManager;
     private PlayerList banList = new PlayerList("ban", "banlist.txt");
     private PlayerList opList = new PlayerList("admin", "oplist.txt");
+
+    public boolean isVerifyPlayers() {
+        return verifyPlayers;
+    }
 
     public MinecraftClassicServer(int port) throws IOException {
         this.port = port;
         this.protocolVersion = 0x07;
         this.serverName = "Java Classic Server";
         this.serverMotd = "Welcome to a basic Minecraft Classic server!";
-        this.verifyPlayers = false;
         this.maxPlayers = 20;
         this.level = loadOrGenerateLevel();
         this.serverSocket = new ServerSocket(port);
         this.levelLock = new Object();
         this.isRunning = false;
         this.autoSaveTimer = new Timer("LevelAutoSave", true);
-        new API(this);
+        if (ENABLE_HEARTBEAT)
+        {
+            this.heartbeatManager = new HeartbeatManager(this);
+            this.heartbeatManager.start();
+        }
+        API.initializeAPI(this);
     }
 
     private void startCommandReader() {
+        CommandSender consoleCommandSender = new ConsoleCommandSender();
         Thread commandThread = new Thread(() -> {
             Scanner scanner = new Scanner(System.in);
             while (isRunning) {
                 if (scanner.hasNextLine()) {
                     String command = scanner.nextLine().trim();
-                    handleCommand(command);
+                    API.getInstance().getCommandRegistry().executeCommand(consoleCommandSender,command);
                 }
             }
             scanner.close();
@@ -63,6 +74,16 @@ public class MinecraftClassicServer {
         commandThread.setName("CommandReader");
         commandThread.setDaemon(true);
         commandThread.start();
+    }
+
+    public boolean verifyPlayer(String username, String key) {
+        if (!this.verifyPlayers || !ENABLE_HEARTBEAT || heartbeatManager == null) {
+            return true;  // Skip verification if disabled or heartbeat is disabled
+        }
+
+        String salt = heartbeatManager.getSalt();
+        String expectedHash = HeartbeatManager.generateMppass(salt, username);
+        return expectedHash.equals(key);
     }
 
     public String handleCommand(String command) {
@@ -102,11 +123,13 @@ public class MinecraftClassicServer {
                     response = " must specify OP name";
                 }
                 break;
+            case "ban":
+                // TODO: implement banning/unbanning
+                break;
             default:
                 response = "Unknown command. Type 'help' for available commands.";
                 break;
         }
-        System.out.println(response);
         return response;
     }
 
@@ -174,7 +197,10 @@ public class MinecraftClassicServer {
         System.out.println("Stopping...");
         isRunning = false;
         autoSaveTimer.cancel();
-
+        if (heartbeatManager != null)
+        {
+            heartbeatManager.stop();
+        }
         System.out.println("Saving level before shutdown...");
         saveLevel();
 
@@ -248,5 +274,13 @@ public class MinecraftClassicServer {
 
     public PlayerList getOpList() {
         return opList;
+    }
+
+    public int getPort() {
+        return port;
+    }
+
+    public int getMaxPlayers() {
+        return maxPlayers;
     }
 }

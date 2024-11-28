@@ -85,6 +85,13 @@ public class ClientHandler implements Runnable {
         }
 
         username = packet.getUsername();
+        if (this.server.isVerifyPlayers())
+        {
+            if (!this.server.verifyPlayer(username, packet.getVerificationKey()))
+            {
+                disconnectPlayer("Name verification failed!");
+            }
+        }
         if (this.server.getBanList().contains(username))
         {
             disconnectPlayer("You are banned!");
@@ -304,17 +311,10 @@ public class ClientHandler implements Runnable {
     private void handleMessage() throws IOException {
         MessagePacket packet = new MessagePacket();
         packet.read(in);
-        if (packet.getMessage().startsWith("/") && this.server.getOpList().contains(this.getUsername().toLowerCase()))
+        if (packet.getMessage().startsWith("/"))
         {
-            String response = "";
-            try {
-                response = this.server.handleCommand(packet.getMessage().substring(1));
-            } catch (ArrayIndexOutOfBoundsException e)
-            {
-                response = "Not enough arguments";
-            }
-            new Player(this).sendMessage(response);
-            return;
+            API.getInstance().getCommandRegistry().executeCommand(new Player(this), packet.getMessage().substring(1));
+
         }
         MessagePacket broadcastPacket = new MessagePacket();
 
