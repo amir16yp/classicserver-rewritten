@@ -1,15 +1,15 @@
 package classic;
 
 import classic.api.API;
-import classic.api.ChatColors;
+import classic.api.BlockType;
 import classic.api.Player;
 import classic.level.Level;
 import classic.packets.*;
+
 import java.io.*;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.zip.GZIPOutputStream;
 
@@ -27,6 +27,30 @@ public class ClientHandler implements Runnable {
 
     public Socket getSocket() {
         return socket;
+    }
+
+    public static ClientHandler getByName(String username)
+    {
+        for (ClientHandler clientHandler : ClientHandler.getClients())
+        {
+            if (username.equals(clientHandler.getUsername()))
+            {
+                return clientHandler;
+            }
+        }
+        return null;
+    }
+
+    public static ClientHandler getByNameCaseInsensitive(String username)
+    {
+        for (ClientHandler clientHandler : ClientHandler.getClients())
+        {
+            if (username.toLowerCase().equals(clientHandler.getUsername().toLowerCase()))
+            {
+                return clientHandler;
+            }
+        }
+        return null;
     }
 
     public ClientHandler(Socket socket, MinecraftClassicServer server) {
@@ -90,11 +114,13 @@ public class ClientHandler implements Runnable {
             if (!this.server.verifyPlayer(username, packet.getVerificationKey()))
             {
                 disconnectPlayer("Name verification failed!");
+                return false;
             }
         }
         if (this.server.getBanList().contains(username))
         {
             disconnectPlayer("You are banned!");
+            return false;
         }
         sendServerIdentification();
         return true;
@@ -105,7 +131,12 @@ public class ClientHandler implements Runnable {
         response.setProtocolVersion(server.getProtocolVersion());
         response.setServerName(server.getServerName());
         response.setServerMOTD(server.getServerMotd());
-        response.setUserType((byte) 0x00);
+        if (Player.getInstance(this).isOP())
+        {
+            response.setUserType((byte) 0x64);
+        } else {
+            response.setUserType((byte) 0x00);
+        }
         response.write(out);
         out.flush();
     }
@@ -224,7 +255,6 @@ public class ClientHandler implements Runnable {
             while (socket.isConnected()) {
                 byte packetId = in.readByte();
                 PacketType packetType = PacketType.fromId(packetId);
-                //System.out.println("Received packet from " + username + ": " + packetType + " (ID: " + packetId + ")");
 
                 switch (packetType) {
                     case POSITION_ORIENTATION:
@@ -313,8 +343,8 @@ public class ClientHandler implements Runnable {
         packet.read(in);
         if (packet.getMessage().startsWith("/"))
         {
-            API.getInstance().getCommandRegistry().executeCommand(new Player(this), packet.getMessage().substring(1));
-
+            API.getInstance().getCommandRegistry().executeCommand(Player.getInstance(this), packet.getMessage().substring(1));
+            return;
         }
         MessagePacket broadcastPacket = new MessagePacket();
 
@@ -351,16 +381,16 @@ public class ClientHandler implements Runnable {
             return false;
         }
 
-        if (packet.getMode() != 0 && packet.getMode() != 1) {
-            //System.out.println("Invalid block change mode: " + packet.getMode());
+        if (packet.getMode() == null) // if place/destroy mode is invalid
+        {
             return false;
         }
 
-        if (packet.getBlockType() < 0 || packet.getBlockType() > 49) {
-            //System.out.println("Invalid block type: " + packet.getBlockType());
+        BlockType blockType = packet.getBlockType();
+        if (blockType == null || blockType == BlockType.BEDROCK)
+        {
             return false;
         }
-
         return true;
     }
 
@@ -386,6 +416,7 @@ public class ClientHandler implements Runnable {
                 } catch (IOException e) {
                     System.out.println("Error while broadcasting despawn: " + e.getMessage());
                 }
+                Player.removeFromCache(this);
             }
         }
     }
@@ -411,20 +442,18 @@ public class ClientHandler implements Runnable {
             SetBlockClientPacket packet = new SetBlockClientPacket();
             packet.read(in);
 
-            //System.out.println("Received SET_BLOCK from " + username + ": " + packet);
-
             if (isValidBlockChange(packet)) {
-                byte currentBlockType = this.server.getBlock(packet.getX(), packet.getY(), packet.getZ());
+                BlockType currentBlockType = this.server.getBlock(packet.getX(), packet.getY(), packet.getZ());
 
-                if (packet.getMode() == 0x00) {  // Destroy block
-                    this.server.setBlock(packet.getX(), packet.getY(), packet.getZ(), (byte) 0);
-                    broadcastBlockChange(packet.getX(), packet.getY(), packet.getZ(), (byte) 0);
-                } else if (packet.getMode() == 0x01) {  // Create block
+                if (packet.getMode().isDestroy()) {  // Destroy block
+                    this.server.setBlock(packet.getX(), packet.getY(), packet.getZ(), BlockType.AIR);
+                    broadcastBlockChange(packet.getX(), packet.getY(), packet.getZ(), BlockType.AIR);
+                } else if (packet.getMode().isPlace()) {  // Create block
                     this.server.setBlock(packet.getX(), packet.getY(), packet.getZ(), packet.getBlockType());
                     broadcastBlockChange(packet.getX(), packet.getY(), packet.getZ(), packet.getBlockType());
                 }
             } else {
-                byte currentBlockType = this.server.getBlock(packet.getX(), packet.getY(), packet.getZ());
+                BlockType currentBlockType = this.server.getBlock(packet.getX(), packet.getY(), packet.getZ());
                 sendBlockCorrection(packet.getX(), packet.getY(), packet.getZ(), currentBlockType);
             }
         } catch (IOException e) {
@@ -437,12 +466,12 @@ public class ClientHandler implements Runnable {
     }
 
 
-    public void broadcastBlockChange(short x, short y, short z, byte blockType) {
+    public void broadcastBlockChange(short x, short y, short z, BlockType blockType) {
         SetBlockServerPacket broadcastPacket = new SetBlockServerPacket();
         broadcastPacket.setX(x);
         broadcastPacket.setY(y);
         broadcastPacket.setZ(z);
-        broadcastPacket.setBlockType(blockType);
+        broadcastPacket.setBlockType(blockType.getId());
 
         for (ClientHandler client : new ArrayList<>(clients.values())) {
             try {
@@ -455,13 +484,13 @@ public class ClientHandler implements Runnable {
         }
     }
 
-    private void sendBlockCorrection(short x, short y, short z, byte blockType) {
+    private void sendBlockCorrection(short x, short y, short z, BlockType blockType) {
         try {
             SetBlockServerPacket correctionPacket = new SetBlockServerPacket();
             correctionPacket.setX(x);
             correctionPacket.setY(y);
             correctionPacket.setZ(z);
-            correctionPacket.setBlockType(blockType);
+            correctionPacket.setBlockType(blockType.getId());
             correctionPacket.write(out);
             out.flush();
             //System.out.println("Sent block correction to " + username + ": " + correctionPacket);

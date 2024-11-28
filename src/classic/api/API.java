@@ -2,10 +2,11 @@ package classic.api;
 
 import classic.ClientHandler;
 import classic.MinecraftClassicServer;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Arrays;
+
+import java.lang.management.ManagementFactory;
+import java.lang.management.OperatingSystemMXBean;
 import java.util.ArrayList;
+import java.util.Map;
 
 public class API {
     private static API instance;
@@ -49,7 +50,7 @@ public class API {
     private ArrayList<Player> getOnlinePlayers() {
         ArrayList<Player> players = new ArrayList<>();
         for (ClientHandler handle : classic.ClientHandler.getClients()) {
-            players.add(new Player(handle));
+            players.add(Player.getInstance(handle));
         }
         return players;
     }
@@ -61,6 +62,39 @@ public class API {
             return "Server stopping...";
         });
 
+        commandRegistry.registerCommand("stats", true, ((sender, args) -> {
+            StringBuilder statsBuilder = new StringBuilder();
+            Runtime runtime = Runtime.getRuntime();
+
+            // Memory usage in MB
+            long usedMemory = (runtime.totalMemory() - runtime.freeMemory()) / 1024 / 1024;
+            long maxMemory = runtime.maxMemory() / 1024 / 1024;
+
+            // Process CPU usage (JVM)
+            OperatingSystemMXBean osBean = ManagementFactory.getOperatingSystemMXBean();
+            double cpuLoad = ((com.sun.management.OperatingSystemMXBean) osBean).getProcessCpuLoad() * 100;
+
+            // Uptime
+            long uptime = ManagementFactory.getRuntimeMXBean().getUptime() / 1000; // in seconds
+            long days = uptime / 86400;
+            long hours = (uptime % 86400) / 3600;
+            long minutes = (uptime % 3600) / 60;
+            long seconds = uptime % 60;
+
+            statsBuilder.append(ChatColors.GOLD).append("Server Stats: ");
+            statsBuilder.append(ChatColors.GREEN).append("Memory: ").append(ChatColors.WHITE).append(usedMemory).append("/").append(maxMemory).append("MB ");
+            statsBuilder.append(ChatColors.GREEN).append("CPU: ").append(ChatColors.WHITE).append(String.format("%.1f", cpuLoad)).append("% ");
+            statsBuilder.append(ChatColors.GREEN).append("Uptime: ").append(ChatColors.WHITE)
+                    .append(days > 0 ? days + "d " : "")
+                    .append(hours > 0 ? hours + "h " : "")
+                    .append(minutes > 0 ? minutes + "m " : "")
+                    .append(seconds + "s ");
+            statsBuilder.append(ChatColors.GREEN).append("Players: ").append(ChatColors.WHITE)
+                    .append(ClientHandler.getClientCount()).append("/")
+                    .append(API.getInstance().getServer().getMaxPlayers());
+
+            return statsBuilder.toString();
+        }));
         commandRegistry.registerCommand("save", true, (sender, args) -> {
             server.handleCommand("save");
             return "Manually saving level...";

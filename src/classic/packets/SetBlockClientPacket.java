@@ -1,5 +1,8 @@
 package classic.packets;
 
+import classic.api.BlockType;
+import classic.api.SetBlockMode;
+
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -61,16 +64,21 @@ public class SetBlockClientPacket extends Packet {
         this.x = x;
     }
 
-    public byte getBlockType() {
+    public byte getBlockID() {
         return blockType;
+    }
+
+    public BlockType getBlockType()
+    {
+        return BlockType.getById(getBlockID());
     }
 
     public void setBlockType(byte blockType) {
         this.blockType = blockType;
     }
 
-    public int getMode() {
-        return mode;
+    public SetBlockMode getMode() {
+        return SetBlockMode.getById(mode);
     }
 
     public void setMode(int mode) {

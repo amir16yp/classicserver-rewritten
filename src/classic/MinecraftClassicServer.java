@@ -1,11 +1,13 @@
 package classic;
 
 import classic.api.API;
+import classic.api.BlockType;
 import classic.api.CommandSender;
 import classic.api.ConsoleCommandSender;
 import classic.level.Level;
 import classic.level.LevelGenerator;
 import classic.packets.DisconnectPlayerPacket;
+
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.ServerSocket;
@@ -13,15 +15,15 @@ import java.net.Socket;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Scanner;
 import java.util.Timer;
 import java.util.TimerTask;
-import java.util.Scanner;
 
 public class MinecraftClassicServer {
     private static final String LEVEL_FILE = "world.dat";
     private static final long SAVE_INTERVAL = 5 * 60 * 1000; // 5 minutes in milliseconds
-    public static boolean ENABLE_HEARTBEAT = true;  // Static flag to control heartbeat
-    private boolean verifyPlayers = true;      // Static flag to control name verification
+    public static boolean ENABLE_HEARTBEAT;  // Set from config
+    private boolean verifyPlayers;      // Set from config
     private final int port;
     private final byte protocolVersion;
     private final String serverName;
@@ -35,27 +37,35 @@ public class MinecraftClassicServer {
     private HeartbeatManager heartbeatManager;
     private PlayerList banList = new PlayerList("ban", "banlist.txt");
     private PlayerList opList = new PlayerList("admin", "oplist.txt");
+    private final Config config;
 
     public boolean isVerifyPlayers() {
         return verifyPlayers;
     }
 
-    public MinecraftClassicServer(int port) throws IOException {
-        this.port = port;
+    public MinecraftClassicServer() throws IOException {
+        this.config = new Config();
+        this.config.loadConfig();
+
+        this.port = config.getPort();
         this.protocolVersion = 0x07;
-        this.serverName = "Java Classic Server";
-        this.serverMotd = "Welcome to a basic Minecraft Classic server!";
-        this.maxPlayers = 20;
+        this.serverName = config.getServerName();
+        this.serverMotd = config.getServerMotd();
+        this.maxPlayers = config.getMaxPlayers();
+        this.verifyPlayers = config.isVerifyPlayers();
+        ENABLE_HEARTBEAT = config.isEnableHeartbeat();
+
         this.level = loadOrGenerateLevel();
         this.serverSocket = new ServerSocket(port);
         this.levelLock = new Object();
         this.isRunning = false;
         this.autoSaveTimer = new Timer("LevelAutoSave", true);
-        if (ENABLE_HEARTBEAT)
-        {
+
+        if (ENABLE_HEARTBEAT) {
             this.heartbeatManager = new HeartbeatManager(this);
             this.heartbeatManager.start();
         }
+
         API.initializeAPI(this);
     }
 
@@ -66,7 +76,7 @@ public class MinecraftClassicServer {
             while (isRunning) {
                 if (scanner.hasNextLine()) {
                     String command = scanner.nextLine().trim();
-                    API.getInstance().getCommandRegistry().executeCommand(consoleCommandSender,command);
+                    API.getInstance().getCommandRegistry().executeCommand(consoleCommandSender, command);
                 }
             }
             scanner.close();
@@ -100,31 +110,75 @@ public class MinecraftClassicServer {
                 response = "Manually saving level...";
                 saveLevel();
                 break;
+            case "reload":
+                response = "Reloading configuration...";
+                config.loadConfig();
+                // Update runtime configuration
+                this.verifyPlayers = config.isVerifyPlayers();
+                ENABLE_HEARTBEAT = config.isEnableHeartbeat();
+                if (ENABLE_HEARTBEAT && heartbeatManager == null) {
+                    heartbeatManager = new HeartbeatManager(this);
+                    heartbeatManager.start();
+                } else if (!ENABLE_HEARTBEAT && heartbeatManager != null) {
+                    heartbeatManager.stop();
+                    heartbeatManager = null;
+                }
+                break;
             case "players":
                 response = "Current players: " + ClientHandler.getClientCount() + "/" + maxPlayers;
                 break;
             case "op":
-                String toOP = parts[1];
-                if (toOP != null)
-                {
+                if (parts.length > 1) {
+                    String toOP = parts[1];
                     this.getOpList().add(toOP.toLowerCase());
-                    response = "added " + toOP.toLowerCase() + " to OP list";
+                    response = "Added " + toOP.toLowerCase() + " to OP list";
                 } else {
-                    response = " must specify OP name";
+                    response = "Must specify OP name";
                 }
                 break;
             case "deop":
-                String toDEOP = parts[1];
-                if (toDEOP != null)
-                {
+                if (parts.length > 1) {
+                    String toDEOP = parts[1];
                     this.getOpList().remove(toDEOP.toLowerCase());
-                    response = "removed " + toDEOP.toLowerCase() + " from op list";
+                    response = "Removed " + toDEOP.toLowerCase() + " from OP list";
                 } else {
-                    response = " must specify OP name";
+                    response = "Must specify OP name";
                 }
                 break;
             case "ban":
-                // TODO: implement banning/unbanning
+                if (parts.length > 1) {
+                    String toBan = parts[1];
+                    this.getBanList().add(toBan.toLowerCase());
+                    response = "Added " + toBan.toLowerCase() + " to ban list";
+                    // Disconnect player if they're currently online
+                    ClientHandler playerHandle = ClientHandler.getByNameCaseInsensitive(toBan);
+                    if (playerHandle != null)
+                    {
+                        playerHandle.disconnectPlayer("You've been banned");
+                    }
+                } else {
+                    response = "Must specify player name to ban";
+                }
+                break;
+            case "unban":
+                if (parts.length > 1) {
+                    String toUnban = parts[1];
+                    this.getBanList().remove(toUnban.toLowerCase());
+                    response = "Removed " + toUnban.toLowerCase() + " from ban list";
+                } else {
+                    response = "Must specify player name to unban";
+                }
+                break;
+            case "help":
+                response = "Available commands:\n" +
+                        "stop - Stops the server\n" +
+                        "save - Saves the world\n" +
+                        "reload - Reloads configuration\n" +
+                        "players - Shows current player count\n" +
+                        "op <player> - Gives operator status\n" +
+                        "deop <player> - Removes operator status\n" +
+                        "ban <player> - Bans a player\n" +
+                        "unban <player> - Unbans a player";
                 break;
             default:
                 response = "Unknown command. Type 'help' for available commands.";
@@ -137,6 +191,7 @@ public class MinecraftClassicServer {
         isRunning = true;
         System.out.println("Minecraft Classic server running on port " + port);
         System.out.println("Player verification is " + (verifyPlayers ? "enabled" : "disabled"));
+        System.out.println("Heartbeat is " + (ENABLE_HEARTBEAT ? "enabled" : "disabled"));
         System.out.println("Maximum players: " + maxPlayers);
         System.out.println("Type 'help' for available commands");
 
@@ -170,7 +225,11 @@ public class MinecraftClassicServer {
                 System.out.println("Generating new level instead...");
             }
         }
-        return new LevelGenerator((short) 1024, (short) 64, (short) 1024    ).generateFlatWorld();
+        return new LevelGenerator(
+                (short) config.getLevelWidth(),
+                (short) config.getLevelHeight(),
+                (short) config.getLevelLength()
+        ).generateFlatWorld();
     }
 
     private void setupAutoSave() {
@@ -186,21 +245,22 @@ public class MinecraftClassicServer {
         synchronized (levelLock) {
             try {
                 level.saveToFile(LEVEL_FILE);
-                System.out.println("Level auto-saved to " + LEVEL_FILE);
+                System.out.println("Level saved to " + LEVEL_FILE);
             } catch (IOException e) {
-                System.out.println("Failed to auto-save level: " + e.getMessage());
+                System.out.println("Failed to save level: " + e.getMessage());
             }
         }
     }
 
     public void stop() {
-        System.out.println("Stopping...");
+        System.out.println("Stopping server...");
         isRunning = false;
         autoSaveTimer.cancel();
-        if (heartbeatManager != null)
-        {
+
+        if (heartbeatManager != null) {
             heartbeatManager.stop();
         }
+
         System.out.println("Saving level before shutdown...");
         saveLevel();
 
@@ -210,7 +270,6 @@ public class MinecraftClassicServer {
             System.out.println("Error closing server socket: " + e.getMessage());
         }
 
-        // Exit the program
         System.exit(0);
     }
 
@@ -231,11 +290,6 @@ public class MinecraftClassicServer {
         clientSocket.close();
     }
 
-    public byte getBlock(short x, short y, short z) {
-        synchronized (levelLock) {
-            return level.getBlock(x, y, z);
-        }
-    }
 
     public void setBlock(short x, short y, short z, byte blockType) {
         synchronized (levelLock) {
@@ -243,6 +297,20 @@ public class MinecraftClassicServer {
         }
     }
 
+    public BlockType getBlock(short x, short y, short z) {
+        synchronized (levelLock) {
+            return BlockType.getById(level.getBlock(x, y, z));
+        }
+    }
+
+    public void setBlock(short x, short y, short z, BlockType blockType) {
+        synchronized (levelLock) {
+            level.setBlock(x, y, z, blockType.getId());
+        }
+    }
+
+
+    // Getters
     public Level getLevel() {
         return level;
     }
@@ -263,11 +331,6 @@ public class MinecraftClassicServer {
         return ClientHandler.getClientCount() >= maxPlayers;
     }
 
-    public static void main(String[] args) throws IOException {
-        MinecraftClassicServer server = new MinecraftClassicServer(25565);
-        server.start();
-    }
-
     public PlayerList getBanList() {
         return banList;
     }
@@ -282,5 +345,10 @@ public class MinecraftClassicServer {
 
     public int getMaxPlayers() {
         return maxPlayers;
+    }
+
+    public static void main(String[] args) throws IOException {
+        MinecraftClassicServer server = new MinecraftClassicServer();
+        server.start();
     }
 }

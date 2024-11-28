@@ -6,23 +6,32 @@ import classic.packets.MessagePacket;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
-public class Player implements CommandSender
-{
-    private ClientHandler handle;
+public class Player implements CommandSender {
+    private static final Map<ClientHandler, Player> playerCache = new ConcurrentHashMap<>();
+    private final ClientHandler handle;
     private static final int MAX_MESSAGE_LENGTH = 64;
-    public Player(ClientHandler handle)
-    {
+
+    private Player(ClientHandler handle) {
         this.handle = handle;
     }
 
-    public String getIPAddress()
-    {
+    public static Player getInstance(ClientHandler handle) {
+        return playerCache.computeIfAbsent(handle, Player::new);
+    }
+
+    // Called when a player disconnects to clean up the cache
+    public static void removeFromCache(ClientHandler handle) {
+        playerCache.remove(handle);
+    }
+
+    public String getIPAddress() {
         return handle.getSocket().getInetAddress().getHostAddress();
     }
 
-    public String getUsername()
-    {
+    public String getUsername() {
         return handle.getUsername();
     }
 
@@ -100,19 +109,20 @@ public class Player implements CommandSender
         return API.getInstance().getServer().getOpList().contains(this.getUsername().toLowerCase());
     }
 
-    public void setOP(boolean op)
-    {
-        if (op)
-        {
+    public void setOP(boolean op) {
+        if (op) {
             API.getInstance().getServer().getOpList().add(this.getUsername().toLowerCase());
         } else {
             API.getInstance().getServer().getOpList().remove(this.getUsername().toLowerCase());
         }
     }
 
-    public void kick(String reason)
-    {
+    public void kick(String reason) {
         handle.disconnectPlayer(reason);
     }
 
+    // Get the underlying ClientHandler
+    public ClientHandler getHandle() {
+        return handle;
+    }
 }

@@ -19,17 +19,18 @@ public class CommandRegistry {
         RegisteredCommand command = commands.get(commandName);
         if (command == null) {
             sender.sendMessage("Unknown command. Type 'help' for available commands.");
+            return;
         }
 
-        // Check if player has permission to use this command
         if (command.isRequiresOp() && !sender.isOP()) {
             sender.sendMessage("You don't have permission to use this command.");
+            return;
         }
 
         try {
             sender.sendMessage(command.getCommand().execute(sender, args));
         } catch (Exception e) {
-            sender.sendMessage("Error executing command: " + e.getMessage());
+                sender.sendMessage("Error executing command: " + e.getMessage());
         }
     }
 

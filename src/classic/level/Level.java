@@ -1,8 +1,8 @@
 package classic.level;
 
 import java.io.*;
-import java.util.zip.*;
-import java.nio.file.*;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.GZIPOutputStream;
 
 public class Level {
     private final byte[][][] blocks;
