@@ -2,17 +2,20 @@ package net.classicube.api;
 
 import net.classicube.ClientHandler;
 import net.classicube.MinecraftClassicServer;
+import net.classicube.packets.MessagePacket;
 
-import java.lang.management.ManagementFactory;
-import java.lang.management.OperatingSystemMXBean;
 import java.util.ArrayList;
-import java.util.Map;
+import java.util.List;
 
 public class API {
+
+    private static final int MAX_MESSAGE_LENGTH = 64;
+
     private static API instance;
     private static boolean initialized = false;
     private final MinecraftClassicServer server;
     private final CommandRegistry commandRegistry;
+    private final PluginLoader pluginLoader;
 
     private API(MinecraftClassicServer server) {
         if (instance != null) {
@@ -20,7 +23,75 @@ public class API {
         }
         this.server = server;
         this.commandRegistry = new CommandRegistry();
+        this.pluginLoader = new PluginLoader();
         registerDefaultCommands();
+    }
+
+
+    public static List<String> splitMessage(String message) {
+        List<String> chunks = new ArrayList<>();
+
+        // If message is short enough, just return it
+        if (message.length() <= MAX_MESSAGE_LENGTH) {
+            chunks.add(message);
+            return chunks;
+        }
+
+        // Split message into lines first
+        String[] lines = message.split("\n");
+
+        for (String line : lines) {
+            // If the line is empty, add it as a separate chunk
+            if (line.isEmpty()) {
+                chunks.add("");
+                continue;
+            }
+
+            // Split line into words
+            String[] words = line.split(" ");
+            StringBuilder currentChunk = new StringBuilder();
+
+            for (String word : words) {
+                // If the word alone is longer than max length, split it
+                if (word.length() > MAX_MESSAGE_LENGTH) {
+                    // First add any existing chunk
+                    if (currentChunk.length() > 0) {
+                        chunks.add(currentChunk.toString());
+                        currentChunk.setLength(0);
+                    }
+
+                    // Split the long word
+                    int start = 0;
+                    while (start < word.length()) {
+                        int end = Math.min(start + MAX_MESSAGE_LENGTH, word.length());
+                        chunks.add(word.substring(start, end));
+                        start = end;
+                    }
+                    continue;
+                }
+
+                // Check if adding this word would exceed the limit
+                if (currentChunk.length() + word.length() + 1 > MAX_MESSAGE_LENGTH) {
+                    // Add current chunk to list and start a new one
+                    chunks.add(currentChunk.toString());
+                    currentChunk.setLength(0);
+                    currentChunk.append(word);
+                } else {
+                    // Add space if not first word in chunk
+                    if (currentChunk.length() > 0) {
+                        currentChunk.append(" ");
+                    }
+                    currentChunk.append(word);
+                }
+            }
+
+            // Add final chunk of the line if there is one
+            if (currentChunk.length() > 0) {
+                chunks.add(currentChunk.toString());
+            }
+        }
+
+        return chunks;
     }
 
     public static API initializeAPI(MinecraftClassicServer server) {
@@ -47,6 +118,14 @@ public class API {
         return getInstance().getOnlinePlayers();
     }
 
+    public void broadcastMessage(String message) {
+        for (String line : splitMessage(message)) {
+            MessagePacket linePacket = new MessagePacket();
+            linePacket.setMessage(line);
+            ClientHandler.broadcastPacket(linePacket);
+        }
+    }
+
     private ArrayList<Player> getOnlinePlayers() {
         ArrayList<Player> players = new ArrayList<>();
         for (ClientHandler handle : ClientHandler.getClients()) {
@@ -57,9 +136,19 @@ public class API {
 
     private void registerDefaultCommands() {
         // Admin commands (require op)
+        /*
+        String[] array = {"Skip", "Hello", "World", "Java", "Programming"};
+String result =
+System.out.println(result);
+         */
         commandRegistry.registerCommand("stop", true, (sender, args) -> {
             server.stop();
             return "Server stopping...";
+        });
+
+        commandRegistry.registerCommand("say", true, (sender, args) -> {
+            API.getInstance().broadcastMessage(ChatColors.RED + "[SERVER] " + ChatColors.YELLOW + String.join(" ", args));
+            return "sent message";
         });
 
         commandRegistry.registerCommand("save", true, (sender, args) -> {
@@ -146,5 +235,9 @@ public class API {
 
     public MinecraftClassicServer getServer() {
         return server;
+    }
+
+    public PluginLoader getPluginLoader() {
+        return pluginLoader;
     }
 }

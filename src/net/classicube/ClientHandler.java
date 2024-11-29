@@ -20,10 +20,10 @@ public class ClientHandler implements Runnable {
     private final MinecraftClassicServer server;
     private final Object writeLock = new Object();
     private final Object readLock = new Object();
+    private final byte playerId;
     private DataInputStream in;
     private DataOutputStream out;
     private String username;
-    private final byte playerId;
     private short x, y, z;
     private byte yaw, pitch;
 
@@ -35,40 +35,29 @@ public class ClientHandler implements Runnable {
     }
 
     public static void broadcastPacket(Packet packet) {
-        for (ClientHandler client : getClients())
-        {
-            if (client.socket.isConnected())
-            {
+        for (ClientHandler client : getClients()) {
+            if (client.socket.isConnected()) {
                 try {
                     client.sendPacket(packet);
                 } catch (Exception e) {
-                    System.out.println("ERROR SENDING PACKET TO " + client.toString() + " " + e.getMessage());
+                    System.out.println("ERROR SENDING PACKET TO " + client + " " + e.getMessage());
                     e.printStackTrace();
                 }
             }
         }
     }
 
-    public static void broadcastPacketExcept(Packet packet, ClientHandler except)
-    {
-        for (ClientHandler client : getClients())
-        {
-            if (client.socket.isConnected() && client != except)
-            {
+    public static void broadcastPacketExcept(Packet packet, ClientHandler except) {
+        for (ClientHandler client : getClients()) {
+            if (client.socket.isConnected() && client != except) {
                 try {
                     client.sendPacket(packet);
                 } catch (Exception e) {
-                    System.out.println("ERROR SENDING PACKET TO " + client.toString() + " " + e.getMessage());
+                    System.out.println("ERROR SENDING PACKET TO " + client + " " + e.getMessage());
                     e.printStackTrace();
                 }
             }
         }
-    }
-
-    @Override
-    public String toString()
-    {
-        return "<ID: " + playerId + " NAME: " + username + " IP: " + this.socket.getInetAddress().getHostAddress() + ">";
     }
 
     public static ClientHandler getByName(String username) {
@@ -102,6 +91,11 @@ public class ClientHandler implements Runnable {
         byte id = nextPlayerId++;
         if (nextPlayerId < 0) nextPlayerId = 0;
         return id;
+    }
+
+    @Override
+    public String toString() {
+        return "<ID: " + playerId + " NAME: " + username + " IP: " + this.socket.getInetAddress().getHostAddress() + ">";
     }
 
     public Socket getSocket() {
@@ -405,6 +399,7 @@ public class ClientHandler implements Runnable {
 
         broadcastPacket(broadcastPacket);
     }
+
     private boolean isValidPosition(short newX, short newY, short newZ) {
         int blockX = newX / 32;
         int blockY = newY / 32;

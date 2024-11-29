@@ -33,11 +33,11 @@ public class MinecraftClassicServer {
     private final Object levelLock;
     private final Timer autoSaveTimer;
     private final Config config;
+    private final PlayerList banList = new PlayerList("ban", "banlist.txt");
+    private final PlayerList opList = new PlayerList("admin", "oplist.txt");
     private boolean verifyPlayers;      // Set from config
     private boolean isRunning;
     private HeartbeatManager heartbeatManager;
-    private final PlayerList banList = new PlayerList("ban", "banlist.txt");
-    private final PlayerList opList = new PlayerList("admin", "oplist.txt");
 
     public MinecraftClassicServer() throws IOException {
         this.config = new Config();

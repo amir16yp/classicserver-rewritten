@@ -4,14 +4,13 @@ import net.classicube.ClientHandler;
 import net.classicube.packets.MessagePacket;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import static net.classicube.api.API.splitMessage;
+
 public class Player implements CommandSender {
     private static final Map<ClientHandler, Player> playerCache = new ConcurrentHashMap<>();
-    private static final int MAX_MESSAGE_LENGTH = 64;
     private final ClientHandler handle;
 
     private Player(ClientHandler handle) {
@@ -47,61 +46,6 @@ public class Player implements CommandSender {
                 throw new RuntimeException(e);
             }
         }
-    }
-
-    private List<String> splitMessage(String message) {
-        List<String> chunks = new ArrayList<>();
-
-        // If message is short enough, just return it
-        if (message.length() <= MAX_MESSAGE_LENGTH) {
-            chunks.add(message);
-            return chunks;
-        }
-
-        // Split message into words
-        String[] words = message.split(" ");
-        StringBuilder currentChunk = new StringBuilder();
-
-        for (String word : words) {
-            // If the word alone is longer than max length, split it
-            if (word.length() > MAX_MESSAGE_LENGTH) {
-                // First add any existing chunk
-                if (currentChunk.length() > 0) {
-                    chunks.add(currentChunk.toString());
-                    currentChunk.setLength(0);
-                }
-
-                // Split the long word
-                int start = 0;
-                while (start < word.length()) {
-                    int end = Math.min(start + MAX_MESSAGE_LENGTH, word.length());
-                    chunks.add(word.substring(start, end));
-                    start = end;
-                }
-                continue;
-            }
-
-            // Check if adding this word would exceed the limit
-            if (currentChunk.length() + word.length() + 1 > MAX_MESSAGE_LENGTH) {
-                // Add current chunk to list and start a new one
-                chunks.add(currentChunk.toString());
-                currentChunk.setLength(0);
-                currentChunk.append(word);
-            } else {
-                // Add space if not first word in chunk
-                if (currentChunk.length() > 0) {
-                    currentChunk.append(" ");
-                }
-                currentChunk.append(word);
-            }
-        }
-
-        // Add final chunk if there is one
-        if (currentChunk.length() > 0) {
-            chunks.add(currentChunk.toString());
-        }
-
-        return chunks;
     }
 
     @Override
