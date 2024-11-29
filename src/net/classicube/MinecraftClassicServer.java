@@ -101,96 +101,6 @@ public class MinecraftClassicServer {
         return expectedHash.equals(key);
     }
 
-    public String handleCommand(String command) {
-        String[] parts = command.split("\\s+");
-        String cmd = parts[0].toLowerCase();
-
-        String response = "";
-
-        switch (cmd) {
-            case "stop":
-                stop();
-                break;
-            case "save":
-                response = "Manually saving level...";
-                saveLevel();
-                break;
-            case "reload":
-                response = "Reloading configuration...";
-                config.loadConfig();
-                // Update runtime configuration
-                this.verifyPlayers = config.isVerifyPlayers();
-                ENABLE_HEARTBEAT = config.isEnableHeartbeat();
-                if (ENABLE_HEARTBEAT && heartbeatManager == null) {
-                    heartbeatManager = new HeartbeatManager(this);
-                    heartbeatManager.start();
-                } else if (!ENABLE_HEARTBEAT && heartbeatManager != null) {
-                    heartbeatManager.stop();
-                    heartbeatManager = null;
-                }
-                break;
-            case "players":
-                response = "Current players: " + ClientHandler.getClientCount() + "/" + maxPlayers;
-                break;
-            case "op":
-                if (parts.length > 1) {
-                    String toOP = parts[1];
-                    this.getOpList().add(toOP.toLowerCase());
-                    response = "Added " + toOP.toLowerCase() + " to OP list";
-                } else {
-                    response = "Must specify OP name";
-                }
-                break;
-            case "deop":
-                if (parts.length > 1) {
-                    String toDEOP = parts[1];
-                    this.getOpList().remove(toDEOP.toLowerCase());
-                    response = "Removed " + toDEOP.toLowerCase() + " from OP list";
-                } else {
-                    response = "Must specify OP name";
-                }
-                break;
-            case "ban":
-                if (parts.length > 1) {
-                    String toBan = parts[1];
-                    this.getBanList().add(toBan.toLowerCase());
-                    response = "Added " + toBan.toLowerCase() + " to ban list";
-                    // Disconnect player if they're currently online
-                    ClientHandler playerHandle = ClientHandler.getByNameCaseInsensitive(toBan);
-                    if (playerHandle != null) {
-                        playerHandle.disconnectPlayer("You've been banned");
-                    }
-                } else {
-                    response = "Must specify player name to ban";
-                }
-                break;
-            case "unban":
-                if (parts.length > 1) {
-                    String toUnban = parts[1];
-                    this.getBanList().remove(toUnban.toLowerCase());
-                    response = "Removed " + toUnban.toLowerCase() + " from ban list";
-                } else {
-                    response = "Must specify player name to unban";
-                }
-                break;
-            case "help":
-                response = "Available commands:\n" +
-                        "stop - Stops the server\n" +
-                        "save - Saves the world\n" +
-                        "reload - Reloads configuration\n" +
-                        "players - Shows current player count\n" +
-                        "op <player> - Gives operator status\n" +
-                        "deop <player> - Removes operator status\n" +
-                        "ban <player> - Bans a player\n" +
-                        "unban <player> - Unbans a player";
-                break;
-            default:
-                response = "Unknown command. Type 'help' for available commands.";
-                break;
-        }
-        return response;
-    }
-
     public void start() {
         isRunning = true;
         System.out.println("Minecraft Classic server running on port " + port);
@@ -245,7 +155,7 @@ public class MinecraftClassicServer {
         }, SAVE_INTERVAL, SAVE_INTERVAL);
     }
 
-    private void saveLevel() {
+    public void saveLevel() {
         synchronized (levelLock) {
             try {
                 level.saveToFile(LEVEL_FILE);
@@ -347,5 +257,19 @@ public class MinecraftClassicServer {
 
     public int getMaxPlayers() {
         return maxPlayers;
+    }
+
+    public void updateConfigurationFromReload() {
+        config.loadConfig();
+        // Update runtime configuration
+        this.verifyPlayers = config.isVerifyPlayers();
+        ENABLE_HEARTBEAT = config.isEnableHeartbeat();
+        if (ENABLE_HEARTBEAT && heartbeatManager == null) {
+            heartbeatManager = new HeartbeatManager(this);
+            heartbeatManager.start();
+        } else if (!ENABLE_HEARTBEAT && heartbeatManager != null) {
+            heartbeatManager.stop();
+            heartbeatManager = null;
+        }
     }
 }

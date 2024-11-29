@@ -34,6 +34,43 @@ public class ClientHandler implements Runnable {
         System.out.println("New client connected. Assigned player ID: " + playerId);
     }
 
+    public static void broadcastPacket(Packet packet) {
+        for (ClientHandler client : getClients())
+        {
+            if (client.socket.isConnected())
+            {
+                try {
+                    client.sendPacket(packet);
+                } catch (Exception e) {
+                    System.out.println("ERROR SENDING PACKET TO " + client.toString() + " " + e.getMessage());
+                    e.printStackTrace();
+                }
+            }
+        }
+    }
+
+    public static void broadcastPacketExcept(Packet packet, ClientHandler except)
+    {
+        for (ClientHandler client : getClients())
+        {
+            if (client.socket.isConnected() && client != except)
+            {
+                try {
+                    client.sendPacket(packet);
+                } catch (Exception e) {
+                    System.out.println("ERROR SENDING PACKET TO " + client.toString() + " " + e.getMessage());
+                    e.printStackTrace();
+                }
+            }
+        }
+    }
+
+    @Override
+    public String toString()
+    {
+        return "<ID: " + playerId + " NAME: " + username + " IP: " + this.socket.getInetAddress().getHostAddress() + ">";
+    }
+
     public static ClientHandler getByName(String username) {
         for (ClientHandler clientHandler : ClientHandler.getClients()) {
             if (username.equals(clientHandler.getUsername())) {
@@ -272,8 +309,9 @@ public class ClientHandler implements Runnable {
         spawnPacket.setZ(playerToSpawn.z);
         spawnPacket.setYaw(playerToSpawn.yaw);
         spawnPacket.setPitch(playerToSpawn.pitch);
+
+        // Send the packet to the receiver
         receiver.sendPacket(spawnPacket);
-        //System.out.println("Sent spawn packet for " + playerToSpawn.username + " (ID: " + playerToSpawn.playerId + ") to " + receiver.username + " (ID: " + receiver.playerId + ")");
     }
 
     private void gameLoop() {
@@ -338,16 +376,7 @@ public class ClientHandler implements Runnable {
         updatePacket.setYaw(yaw);
         updatePacket.setPitch(pitch);
 
-        for (ClientHandler client : new ArrayList<>(clients.values())) {
-            if (client != this && client.socket.isConnected()) {
-                try {
-                    updatePacket.write(client.out);
-                    //System.out.println("Sent position update for " + username + " (ID: " + playerId + ") to " + client.username + " (ID: " + client.playerId + ")");
-                } catch (IOException e) {
-                    System.out.println("Failed to send position update to " + client.username + ": " + e.getMessage());
-                }
-            }
-        }
+        broadcastPacketExcept(updatePacket, this);
     }
 
     private void sendPositionCorrection() throws IOException {
@@ -374,11 +403,8 @@ public class ClientHandler implements Runnable {
         broadcastPacket.setPlayerId(playerId);
         broadcastPacket.setMessage(username + ":" + packet.getMessage());
 
-        for (ClientHandler client : clients.values()) {
-            client.sendPacket(broadcastPacket);
-        }
+        broadcastPacket(broadcastPacket);
     }
-
     private boolean isValidPosition(short newX, short newY, short newZ) {
         int blockX = newX / 32;
         int blockY = newY / 32;
@@ -441,15 +467,7 @@ public class ClientHandler implements Runnable {
         DespawnPlayerPacket despawnPacket = new DespawnPlayerPacket();
         despawnPacket.setPlayerId(playerId);
 
-        for (ClientHandler client : new ArrayList<>(clients.values())) {
-            if (client != this && client.socket.isConnected()) {
-                try {
-                    client.sendPacket(despawnPacket);
-                } catch (IOException e) {
-                    System.out.println("Failed to send despawn packet to " + client.username + ": " + e.getMessage());
-                }
-            }
-        }
+        broadcastPacketExcept(despawnPacket, this);
     }
 
     private void handleSetBlock() {
@@ -486,14 +504,9 @@ public class ClientHandler implements Runnable {
         broadcastPacket.setZ(z);
         broadcastPacket.setBlockType(blockType.getId());
 
-        for (ClientHandler client : new ArrayList<>(clients.values())) {
-            try {
-                client.sendPacket(broadcastPacket);
-            } catch (IOException e) {
-                System.out.println("Failed to send SET_BLOCK to " + client.username + ": " + e.getMessage());
-            }
-        }
+        broadcastPacket(broadcastPacket);
     }
+
 
     private void sendBlockCorrection(short x, short y, short z, BlockType blockType) {
         try {

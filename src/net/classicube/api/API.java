@@ -62,74 +62,81 @@ public class API {
             return "Server stopping...";
         });
 
-        commandRegistry.registerCommand("stats", true, ((sender, args) -> {
-            StringBuilder statsBuilder = new StringBuilder();
-            Runtime runtime = Runtime.getRuntime();
-
-            // Memory usage in MB
-            long usedMemory = (runtime.totalMemory() - runtime.freeMemory()) / 1024 / 1024;
-            long maxMemory = runtime.maxMemory() / 1024 / 1024;
-
-            // Process CPU usage (JVM)
-            OperatingSystemMXBean osBean = ManagementFactory.getOperatingSystemMXBean();
-            double cpuLoad = ((com.sun.management.OperatingSystemMXBean) osBean).getProcessCpuLoad() * 100;
-
-            // Uptime
-            long uptime = ManagementFactory.getRuntimeMXBean().getUptime() / 1000; // in seconds
-            long days = uptime / 86400;
-            long hours = (uptime % 86400) / 3600;
-            long minutes = (uptime % 3600) / 60;
-            long seconds = uptime % 60;
-
-            statsBuilder.append(ChatColors.GOLD).append("Server Stats: ");
-            statsBuilder.append(ChatColors.GREEN).append("Memory: ").append(ChatColors.WHITE).append(usedMemory).append("/").append(maxMemory).append("MB ");
-            statsBuilder.append(ChatColors.GREEN).append("CPU: ").append(ChatColors.WHITE).append(String.format("%.1f", cpuLoad)).append("% ");
-            statsBuilder.append(ChatColors.GREEN).append("Uptime: ").append(ChatColors.WHITE)
-                    .append(days > 0 ? days + "d " : "")
-                    .append(hours > 0 ? hours + "h " : "")
-                    .append(minutes > 0 ? minutes + "m " : "")
-                    .append(seconds + "s ");
-            statsBuilder.append(ChatColors.GREEN).append("Players: ").append(ChatColors.WHITE)
-                    .append(ClientHandler.getClientCount()).append("/")
-                    .append(API.getInstance().getServer().getMaxPlayers());
-
-            return statsBuilder.toString();
-        }));
         commandRegistry.registerCommand("save", true, (sender, args) -> {
-            server.handleCommand("save");
-            return "Manually saving level...";
+            synchronized (server) {
+                try {
+                    server.saveLevel();
+                    return "Manually saving level...";
+                } catch (Exception e) {
+                    return "Error saving level: " + e.getMessage();
+                }
+            }
+        });
+
+        commandRegistry.registerCommand("reload", true, (sender, args) -> {
+            server.updateConfigurationFromReload();
+            return "Configuration reloaded";
+        });
+
+        commandRegistry.registerCommand("players", false, (sender, args) -> {
+            return "Current players: " + ClientHandler.getClientCount() + "/" + server.getMaxPlayers();
         });
 
         commandRegistry.registerCommand("op", true, (sender, args) -> {
             if (args.length < 1) {
                 return "Usage: /op <player>";
             }
-            server.getOpList().add(args[0].toLowerCase());
-            return "Added " + args[0].toLowerCase() + " to OP list";
+            String toOP = args[0].toLowerCase();
+            server.getOpList().add(toOP);
+            return "Added " + toOP + " to OP list";
         });
 
         commandRegistry.registerCommand("deop", true, (sender, args) -> {
             if (args.length < 1) {
                 return "Usage: /deop <player>";
             }
-            server.getOpList().remove(args[0].toLowerCase());
-            return "Removed " + args[0].toLowerCase() + " from OP list";
+            String toDEOP = args[0].toLowerCase();
+            server.getOpList().remove(toDEOP);
+            return "Removed " + toDEOP + " from OP list";
         });
 
-        // Public commands (no op required)
-        commandRegistry.registerCommand("players", false, (sender, args) -> {
-            return "Current players: " + getPlayers().size() + "/" + 20;
+        commandRegistry.registerCommand("ban", true, (sender, args) -> {
+            if (args.length < 1) {
+                return "Usage: /ban <player>";
+            }
+            String toBan = args[0].toLowerCase();
+            server.getBanList().add(toBan);
+
+            // Disconnect player if they're currently online
+            ClientHandler playerHandle = ClientHandler.getByNameCaseInsensitive(toBan);
+            if (playerHandle != null) {
+                playerHandle.disconnectPlayer("You've been banned");
+            }
+
+            return "Added " + toBan + " to ban list";
+        });
+
+        commandRegistry.registerCommand("unban", true, (sender, args) -> {
+            if (args.length < 1) {
+                return "Usage: /unban <player>";
+            }
+            String toUnban = args[0].toLowerCase();
+            server.getBanList().remove(toUnban);
+            return "Removed " + toUnban + " from ban list";
         });
 
         commandRegistry.registerCommand("help", false, (sender, args) -> {
-            StringBuilder help = new StringBuilder("Available commands:\n");
-            boolean isOp = sender.isOP();
-            for (Map.Entry<String, RegisteredCommand> entry : commandRegistry.getCommands().entrySet()) {
-                if (!entry.getValue().isRequiresOp() || isOp) {
-                    help.append("/" + entry.getKey() + (entry.getValue().isRequiresOp() ? " (OP)" : "") + "\n");
-                }
-            }
-            return help.toString();
+            return "Available commands:\n" +
+                    "stop - Stops the server\n" +
+                    "save - Saves the world\n" +
+                    "reload - Reloads configuration\n" +
+                    "players - Shows current player count\n" +
+                    "op <player> - Gives operator status\n" +
+                    "deop <player> - Removes operator status\n" +
+                    "ban <player> - Bans a player\n" +
+                    "unban <player> - Unbans a player\n" +
+                    "stats - Shows server statistics\n" +
+                    "help - Shows this help message";
         });
     }
 
