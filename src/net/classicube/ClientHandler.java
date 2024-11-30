@@ -1,7 +1,7 @@
 package net.classicube;
 
 import net.classicube.api.API;
-import net.classicube.api.BlockType;
+import net.classicube.api.enums.BlockType;
 import net.classicube.api.Player;
 import net.classicube.api.event.EventRegistry;
 import net.classicube.api.event.PlayerJoinEvent;
@@ -523,7 +523,6 @@ public class ClientHandler implements Runnable {
 
         broadcastPacket(broadcastPacket);
     }
-
 
     private void sendBlockCorrection(short x, short y, short z, BlockType blockType) {
         try {

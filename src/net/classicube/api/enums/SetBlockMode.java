@@ -1,4 +1,4 @@
-package net.classicube.api;
+package net.classicube.api.enums;
 
 public enum SetBlockMode {
     DESTROY((byte) 0x00),  // Player destroying a block

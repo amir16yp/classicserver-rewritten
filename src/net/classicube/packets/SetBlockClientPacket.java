@@ -1,7 +1,7 @@
 package net.classicube.packets;
 
-import net.classicube.api.BlockType;
-import net.classicube.api.SetBlockMode;
+import net.classicube.api.enums.BlockType;
+import net.classicube.api.enums.SetBlockMode;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;

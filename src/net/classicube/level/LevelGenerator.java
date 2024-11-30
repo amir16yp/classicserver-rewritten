@@ -1,6 +1,6 @@
 package net.classicube.level;
 
-import net.classicube.api.BlockType;
+import net.classicube.api.enums.BlockType;
 
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
@@ -40,7 +40,10 @@ public class LevelGenerator {
         if (y == 0) {
             return BlockType.BEDROCK; // Bedrock
         } else if (y == 1) {
-            return BlockType.GRASS_BLOCK;
+            return BlockType.STATIONARY_LAVA;
+        } else if (y == 2)
+        {
+            return BlockType.GLASS;
         } else {
             return BlockType.AIR;
         }

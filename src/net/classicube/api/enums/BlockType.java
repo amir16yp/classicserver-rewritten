@@ -1,4 +1,4 @@
-package net.classicube.api;
+package net.classicube.api.enums;
 
 public enum BlockType {
     AIR(0),

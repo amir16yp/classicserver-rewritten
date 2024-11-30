@@ -32,6 +32,7 @@ public enum PacketType {
     CPE_REMOVE_SELECTION(0x1B),
     CPE_EXT_ADD_PLAYERNAME(0x16),
     CPE_EXT_REMOVE_PLAYER_NAME(0x18),
+    CPE_ENV_SET_COLORS(0x19),
     // Special type for unknown packets
     UNKNOWN(-1);
 

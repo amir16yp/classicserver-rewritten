@@ -1,6 +1,6 @@
 package net.classicube.level;
 
-import net.classicube.api.BlockType;
+import net.classicube.api.enums.BlockType;
 
 import java.io.*;
 import java.util.zip.GZIPInputStream;

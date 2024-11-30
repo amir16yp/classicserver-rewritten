@@ -1,5 +1,7 @@
 package net.classicube.api;
 
+import net.classicube.api.enums.BlockType;
+
 public class Location {
     private final short x, y, z;
     private final short rawX;
@@ -16,6 +18,16 @@ public class Location {
         this.z = (short) (rawZ >> 5);
         this.yaw = yaw;
         this.pitch = pitch;
+    }
+
+    public static Location fromBlockCoordinates(short x, short y, short z, byte yaw, byte pitch)
+    {
+        return new Location((short) (x << 5), (short) (y << 5), (short) (z << 5), yaw, pitch);
+    }
+
+    public static Location fromBlockCoordinates(short x, short y, short z)
+    {
+        return fromBlockCoordinates(x, y, z, (byte) 0, (byte) 0);
     }
 
     public int getX() {

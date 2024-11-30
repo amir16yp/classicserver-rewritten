@@ -2,7 +2,10 @@ package net.classicube.api;
 
 import net.classicube.ClientHandler;
 import net.classicube.MinecraftClassicServer;
+import net.classicube.api.enums.ChatColors;
+import net.classicube.api.enums.EnvColorType;
 import net.classicube.packets.MessagePacket;
+import net.classicube.packets.cpe.EnvColorsPacket;
 import net.classicube.packets.cpe.MakeSelectionPacket;
 
 import java.awt.*;
@@ -159,6 +162,16 @@ public class API {
 
             return "test complete";
         }));
+
+        commandRegistry.registerCommand("cpetest:envcolor", true, (((sender, args) -> {
+            if (sender instanceof Player) {
+                ClientHandler clientHandler = ((Player) sender).getHandle();
+                clientHandler.sendPacket(new EnvColorsPacket(EnvColorType.SKY_COLOR, Color.RED));
+                clientHandler.sendPacket(new EnvColorsPacket(EnvColorType.CLOUD_COLOR, Color.BLACK));
+                clientHandler.sendPacket(new EnvColorsPacket(EnvColorType.FOG_COLOR, Color.ORANGE));
+            }
+            return "test complete";
+        })));
 
         commandRegistry.registerCommand("tp", false, ((sender, args) -> {
             if (sender instanceof Player) {

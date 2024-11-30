@@ -1,6 +1,7 @@
 package net.classicube;
 
 import net.classicube.api.*;
+import net.classicube.api.enums.BlockType;
 import net.classicube.level.Level;
 import net.classicube.level.LevelGenerator;
 import net.classicube.packets.DisconnectPlayerPacket;
