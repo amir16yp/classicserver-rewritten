@@ -24,6 +24,14 @@ public enum PacketType {
     DISCONNECT_PLAYER(0x0e),
     UPDATE_USER_TYPE(0x0f),
 
+    // CPE packetts
+
+    CPE_EXTINFO(0x10),
+    CPE_EXTENTRY(0x11),
+    CPE_MAKE_SELECTION(0x1A),
+    CPE_REMOVE_SELECTION(0x1B),
+    CPE_EXT_ADD_PLAYERNAME(0x16),
+    CPE_EXT_REMOVE_PLAYER_NAME(0x18),
     // Special type for unknown packets
     UNKNOWN(-1);
 

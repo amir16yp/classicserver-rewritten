@@ -17,6 +17,9 @@ import java.util.Timer;
 import java.util.TimerTask;
 
 public class MinecraftClassicServer {
+
+    public static final String APP_NAME = "JavaCCRewritten";
+
     private static final String LEVEL_FILE = "world.dat";
     private static final long SAVE_INTERVAL = 5 * 60 * 1000; // 5 minutes in milliseconds
     public static boolean ENABLE_HEARTBEAT;  // Set from config

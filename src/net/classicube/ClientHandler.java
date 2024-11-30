@@ -5,6 +5,7 @@ import net.classicube.api.BlockType;
 import net.classicube.api.Player;
 import net.classicube.level.Level;
 import net.classicube.packets.*;
+import net.classicube.packets.cpe.*;
 
 import java.io.*;
 import java.net.Socket;
@@ -26,7 +27,7 @@ public class ClientHandler implements Runnable {
     private String username;
     private short x, y, z;
     private byte yaw, pitch;
-
+    private boolean supportsCPE;
     public ClientHandler(Socket socket, MinecraftClassicServer server) {
         this.socket = socket;
         this.server = server;
@@ -104,6 +105,10 @@ public class ClientHandler implements Runnable {
 
     public void sendPacket(Packet packet) throws IOException {
         synchronized (writeLock) {
+            if (packet instanceof CPEPacket && !this.supportsCPE)
+            {
+                return;
+            }
             packet.write(out);
             out.flush();
         }
@@ -154,7 +159,9 @@ public class ClientHandler implements Runnable {
 
         PlayerIdentificationPacket packet = new PlayerIdentificationPacket();
         readPacket(packet);
-
+        this.supportsCPE = packet.getPaddingByte() == 0x42;
+        sendPacket(new ExtInfoPacket());
+        //sendCPEEntries();
         if (packet.getProtocolVersion() != server.getProtocolVersion()) {
             disconnectPlayer("Incompatible protocol version");
             return false;
@@ -179,6 +186,13 @@ public class ClientHandler implements Runnable {
             return false;
         }
         sendServerIdentification();
+        ExtAddPlayerNamePacket playerNamePacket = new ExtAddPlayerNamePacket();
+        playerNamePacket.setGroupName("players");
+        playerNamePacket.setNameID(this.playerId);
+        playerNamePacket.setAutocompletePlayerName(username);
+        playerNamePacket.setListPlayerName(username);
+        playerNamePacket.setGroupRank((byte) 0);
+        broadcastPacket(playerNamePacket);
         return true;
     }
 
@@ -441,6 +455,7 @@ public class ClientHandler implements Runnable {
                 DisconnectPlayerPacket disconnectPacket = new DisconnectPlayerPacket();
                 disconnectPacket.setReason(reason);
                 sendPacket(disconnectPacket);
+                broadcastPacket(new ExtRemovePlayerNamePacket(this.playerId));
                 socket.close();
             }
         } catch (IOException e) {

@@ -8,7 +8,7 @@ public class PlayerIdentificationPacket extends Packet {
     private byte protocolVersion;
     private String username;
     private String verificationKey;
-    private byte unused;
+    private byte paddingByte;
 
     public PlayerIdentificationPacket() {
         super(PacketType.PLAYER_IDENTIFICATION);
@@ -20,7 +20,7 @@ public class PlayerIdentificationPacket extends Packet {
         out.writeByte(protocolVersion);
         Packet.writeString(out, username);
         Packet.writeString(out, verificationKey);
-        out.writeByte(unused);
+        out.writeByte(paddingByte);
     }
 
     @Override
@@ -28,7 +28,7 @@ public class PlayerIdentificationPacket extends Packet {
         protocolVersion = in.readByte();
         username = Packet.readString(in);
         verificationKey = Packet.readString(in);
-        unused = in.readByte();
+        paddingByte = in.readByte();
     }
 
     // Getters and setters
@@ -56,11 +56,11 @@ public class PlayerIdentificationPacket extends Packet {
         this.verificationKey = verificationKey;
     }
 
-    public byte getUnused() {
-        return unused;
+    public byte getPaddingByte() {
+        return paddingByte;
     }
 
-    public void setUnused(byte unused) {
-        this.unused = unused;
+    public void setPaddingByte(byte paddingByte) {
+        this.paddingByte = paddingByte;
     }
 }

@@ -3,7 +3,9 @@ package net.classicube.api;
 import net.classicube.ClientHandler;
 import net.classicube.MinecraftClassicServer;
 import net.classicube.packets.MessagePacket;
+import net.classicube.packets.cpe.MakeSelectionPacket;
 
+import java.awt.*;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -146,6 +148,18 @@ public class API {
             API.getInstance().broadcastMessage(ChatColors.RED + "[SERVER] " + ChatColors.YELLOW + String.join(" ", args));
             return "sent message";
         });
+
+        commandRegistry.registerCommand("cpetest:selection", true, ((sender, args) ->{
+            if (sender instanceof Player)
+            {
+                List<Player> players = getOnlinePlayers();
+                BlockSelection selection = new BlockSelection(players.get(0).getLocation(), players.get(1).getLocation(), new Color(255, 0, 0, 128), "test");
+                MakeSelectionPacket makeSelectionPacket = new MakeSelectionPacket(selection);
+                ClientHandler.broadcastPacket(makeSelectionPacket);
+            }
+
+            return "test complete";
+        }));
 
         commandRegistry.registerCommand("tp", false, ((sender, args) -> {
             if (sender instanceof Player) {
