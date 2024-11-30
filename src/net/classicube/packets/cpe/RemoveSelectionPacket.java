@@ -5,8 +5,7 @@ import net.classicube.packets.PacketType;
 import java.io.DataOutputStream;
 import java.io.IOException;
 
-public class RemoveSelectionPacket extends CPEPacket
-{
+public class RemoveSelectionPacket extends CPEPacket {
     private final byte toRemoveID;
 
     public RemoveSelectionPacket(byte toRemoveID) {

@@ -5,7 +5,7 @@ import net.classicube.packets.PacketType;
 import java.io.DataOutputStream;
 import java.io.IOException;
 
-public class ExtRemovePlayerNamePacket extends CPEPacket{
+public class ExtRemovePlayerNamePacket extends CPEPacket {
     private final byte playerID;
 
     public ExtRemovePlayerNamePacket(byte playerID) {

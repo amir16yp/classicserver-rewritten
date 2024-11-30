@@ -11,6 +11,7 @@ public class ExtAddPlayerNamePacket extends CPEPacket {
     private String listPlayerName;
     private String groupName;
     private byte groupRank;
+
     public ExtAddPlayerNamePacket() {
         super(PacketType.CPE_EXT_ADD_PLAYERNAME);
     }

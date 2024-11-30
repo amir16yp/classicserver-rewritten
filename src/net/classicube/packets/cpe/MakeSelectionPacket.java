@@ -1,16 +1,15 @@
 package net.classicube.packets.cpe;
 
 import net.classicube.api.BlockSelection;
-import net.classicube.api.Location;
 import net.classicube.packets.PacketType;
 
-import java.awt.*;
 import java.io.DataOutputStream;
 import java.io.IOException;
 
 public class MakeSelectionPacket extends CPEPacket {
-    private final BlockSelection blockSelection;
     private static byte selectionId;
+    private final BlockSelection blockSelection;
+
     public MakeSelectionPacket(BlockSelection blockSelection) {
         super(PacketType.CPE_MAKE_SELECTION);
         this.blockSelection = blockSelection;
@@ -33,8 +32,7 @@ public class MakeSelectionPacket extends CPEPacket {
         out.writeShort(blockSelection.getOutlineColor().getBlue());
         out.writeShort(blockSelection.getOutlineColor().getAlpha());
         selectionId++;
-        if (selectionId > 127)
-        {
+        if (selectionId > 127) {
             selectionId = 0;
         }
     }

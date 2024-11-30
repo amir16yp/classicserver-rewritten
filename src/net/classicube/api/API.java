@@ -149,9 +149,8 @@ public class API {
             return "sent message";
         });
 
-        commandRegistry.registerCommand("cpetest:selection", true, ((sender, args) ->{
-            if (sender instanceof Player)
-            {
+        commandRegistry.registerCommand("cpetest:selection", true, ((sender, args) -> {
+            if (sender instanceof Player) {
                 List<Player> players = getOnlinePlayers();
                 BlockSelection selection = new BlockSelection(players.get(0).getLocation(), players.get(1).getLocation(), new Color(255, 0, 0, 128), "test");
                 MakeSelectionPacket makeSelectionPacket = new MakeSelectionPacket(selection);

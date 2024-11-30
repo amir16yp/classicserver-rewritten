@@ -5,7 +5,10 @@ import net.classicube.api.BlockType;
 import net.classicube.api.Player;
 import net.classicube.level.Level;
 import net.classicube.packets.*;
-import net.classicube.packets.cpe.*;
+import net.classicube.packets.cpe.CPEPacket;
+import net.classicube.packets.cpe.ExtAddPlayerNamePacket;
+import net.classicube.packets.cpe.ExtInfoPacket;
+import net.classicube.packets.cpe.ExtRemovePlayerNamePacket;
 
 import java.io.*;
 import java.net.Socket;
@@ -28,6 +31,7 @@ public class ClientHandler implements Runnable {
     private short x, y, z;
     private byte yaw, pitch;
     private boolean supportsCPE;
+
     public ClientHandler(Socket socket, MinecraftClassicServer server) {
         this.socket = socket;
         this.server = server;
@@ -105,8 +109,7 @@ public class ClientHandler implements Runnable {
 
     public void sendPacket(Packet packet) throws IOException {
         synchronized (writeLock) {
-            if (packet instanceof CPEPacket && !this.supportsCPE)
-            {
+            if (packet instanceof CPEPacket && !this.supportsCPE) {
                 return;
             }
             packet.write(out);

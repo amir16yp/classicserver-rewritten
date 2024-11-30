@@ -7,8 +7,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 
-public class CPEPacket extends Packet
-{
+public class CPEPacket extends Packet {
     public CPEPacket(PacketType cpePacketType) {
         super(cpePacketType);
     }

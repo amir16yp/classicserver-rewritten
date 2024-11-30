@@ -1,6 +1,6 @@
 package net.classicube.api;
 
-import java.awt.Color;
+import java.awt.*;
 
 public class BlockSelection {
 
@@ -9,6 +9,7 @@ public class BlockSelection {
     private Color outlineColor;
     private String label;
     private byte selectionId;
+
     public BlockSelection(Location point1, Location point2, Color outlineColor, String label) {
         this.point1 = point1;
         this.point2 = point2;
@@ -36,6 +37,7 @@ public class BlockSelection {
     public Color getOutlineColor() {
         return outlineColor;
     }
+
     public void setOutlineColor(Color outlineColor) {
         this.outlineColor = outlineColor;
     }
