@@ -3,6 +3,8 @@ package net.classicube;
 import net.classicube.api.API;
 import net.classicube.api.BlockType;
 import net.classicube.api.Player;
+import net.classicube.api.event.EventRegistry;
+import net.classicube.api.event.PlayerJoinEvent;
 import net.classicube.level.Level;
 import net.classicube.packets.*;
 import net.classicube.packets.cpe.CPEPacket;
@@ -138,6 +140,7 @@ public class ClientHandler implements Runnable {
                 spawnPlayer();
                 broadcastSpawn();
                 clients.put(playerId, this);
+                EventRegistry.callEvent(new PlayerJoinEvent(Player.getInstance(this)));
                 gameLoop();
             }
         } catch (IOException e) {
@@ -195,6 +198,7 @@ public class ClientHandler implements Runnable {
         playerNamePacket.setAutocompletePlayerName(username);
         playerNamePacket.setListPlayerName(username);
         playerNamePacket.setGroupRank((byte) 0);
+
         broadcastPacket(playerNamePacket);
         return true;
     }
