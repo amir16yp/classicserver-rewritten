@@ -1,9 +1,6 @@
 package net.classicube;
 
-import net.classicube.api.API;
-import net.classicube.api.BlockType;
-import net.classicube.api.CommandSender;
-import net.classicube.api.ConsoleCommandSender;
+import net.classicube.api.*;
 import net.classicube.level.Level;
 import net.classicube.level.LevelGenerator;
 import net.classicube.packets.DisconnectPlayerPacket;
@@ -174,7 +171,7 @@ public class MinecraftClassicServer {
         if (heartbeatManager != null) {
             heartbeatManager.stop();
         }
-
+        API.getInstance().getPluginLoader().disablePlugins();
         System.out.println("Saving level before shutdown...");
         saveLevel();
 
@@ -261,7 +258,6 @@ public class MinecraftClassicServer {
 
     public void updateConfigurationFromReload() {
         config.loadConfig();
-        // Update runtime configuration
         this.verifyPlayers = config.isVerifyPlayers();
         ENABLE_HEARTBEAT = config.isEnableHeartbeat();
         if (ENABLE_HEARTBEAT && heartbeatManager == null) {
@@ -271,5 +267,9 @@ public class MinecraftClassicServer {
             heartbeatManager.stop();
             heartbeatManager = null;
         }
+        PluginLoader pluginLoader = API.getInstance().getPluginLoader();
+        pluginLoader.disablePlugins();
+        pluginLoader.loadPlugins("plugins");
+        pluginLoader.enablePlugins();
     }
 }

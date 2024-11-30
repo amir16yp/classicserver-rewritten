@@ -25,6 +25,8 @@ public class API {
         this.commandRegistry = new CommandRegistry();
         this.pluginLoader = new PluginLoader();
         registerDefaultCommands();
+        this.pluginLoader.loadPlugins("plugins");
+        this.pluginLoader.enablePlugins();
     }
 
 
@@ -135,12 +137,6 @@ public class API {
     }
 
     private void registerDefaultCommands() {
-        // Admin commands (require op)
-        /*
-        String[] array = {"Skip", "Hello", "World", "Java", "Programming"};
-String result =
-System.out.println(result);
-         */
         commandRegistry.registerCommand("stop", true, (sender, args) -> {
             server.stop();
             return "Server stopping...";
@@ -150,6 +146,25 @@ System.out.println(result);
             API.getInstance().broadcastMessage(ChatColors.RED + "[SERVER] " + ChatColors.YELLOW + String.join(" ", args));
             return "sent message";
         });
+
+        commandRegistry.registerCommand("tp", false, ((sender, args) -> {
+            if (sender instanceof Player) {
+                if (args.length == 0) {
+                    return "must specify a player name";
+                }
+                Player playerSender = (Player) sender;
+                String playerNameToTP = args[0];
+                ClientHandler toTPhandle = ClientHandler.getByNameCaseInsensitive(playerNameToTP);
+                if (toTPhandle != null) {
+                    Player toTP = Player.getInstance(toTPhandle);
+                    playerSender.teleport(toTP.getLocation());
+                    return "teleported to " + toTP.getUsername();
+                } else {
+                    return "player not found";
+                }
+            }
+            return "you must be a player for this command";
+        }));
 
         commandRegistry.registerCommand("save", true, (sender, args) -> {
             synchronized (server) {

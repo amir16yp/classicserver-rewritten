@@ -381,7 +381,7 @@ public class ClientHandler implements Runnable {
         correctPacket.setZ(z);
         correctPacket.setYaw(yaw);
         correctPacket.setPitch(pitch);
-        correctPacket.write(out);
+        sendPacket(correctPacket);
         //System.out.println("Sent correction packet to " + username);
     }
 

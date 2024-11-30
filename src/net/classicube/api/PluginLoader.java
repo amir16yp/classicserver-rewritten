@@ -14,7 +14,7 @@ public class PluginLoader {
     private final List<JavaPlugin> loadedPlugins = new ArrayList<>();
 
     public void loadPlugins(String pluginFolderPath) {
-        List<JavaPlugin> loadedPlugins = new ArrayList<>();
+        loadedPlugins.clear();
         File pluginFolder = new File(pluginFolderPath);
 
         if (!pluginFolder.exists() || !pluginFolder.isDirectory()) {

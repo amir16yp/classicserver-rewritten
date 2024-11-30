@@ -2,6 +2,7 @@ package net.classicube.api;
 
 import net.classicube.ClientHandler;
 import net.classicube.packets.MessagePacket;
+import net.classicube.packets.ServerPositionPacket;
 
 import java.io.IOException;
 import java.util.Map;
@@ -32,6 +33,21 @@ public class Player implements CommandSender {
 
     public String getUsername() {
         return handle.getUsername();
+    }
+
+    public void teleport(Location location) {
+        ServerPositionPacket positionPacket = new ServerPositionPacket();
+        positionPacket.setPlayerId((byte) -1);
+        positionPacket.setX(location.getRawX());
+        positionPacket.setY(location.getRawY());
+        positionPacket.setZ(location.getRawZ());
+        positionPacket.setYaw(location.getYaw());
+        positionPacket.setPitch(location.getPitch());
+        ClientHandler.broadcastPacket(positionPacket);
+    }
+
+    public Location getLocation() {
+        return new Location(this.handle.getX(), this.handle.getY(), this.handle.getZ(), this.handle.getYaw(), this.handle.getPitch());
     }
 
     public void sendMessage(String message) {
