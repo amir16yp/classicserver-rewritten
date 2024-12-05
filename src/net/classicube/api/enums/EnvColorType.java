@@ -1,7 +1,5 @@
 package net.classicube.api.enums;
 
-import net.classicube.packets.cpe.EnvColorsPacket;
-
 public enum EnvColorType
 {
     SKY_COLOR((byte) 0),

@@ -1,6 +1,9 @@
 package net.classicube;
 
-import net.classicube.api.*;
+import net.classicube.api.API;
+import net.classicube.api.CommandSender;
+import net.classicube.api.ConsoleCommandSender;
+import net.classicube.api.PluginLoader;
 import net.classicube.api.enums.BlockType;
 import net.classicube.level.Level;
 import net.classicube.level.LevelGenerator;
