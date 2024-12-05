@@ -13,7 +13,7 @@ public class DisconnectPlayerPacket extends Packet {
 
     @Override
     public void write(DataOutputStream out) throws IOException {
-        out.writeByte(type.getId());
+        super.write(out);
         Packet.writeString(out, reason);
     }
 

@@ -18,7 +18,7 @@ public class LevelDataChunkPacket extends Packet {
 
     @Override
     public void write(DataOutputStream out) throws IOException {
-        out.writeByte(type.getId());
+        super.write(out);
         out.writeShort(chunkLength);
         out.write(chunkData, 0, CHUNK_SIZE); // Always write 1024 bytes
         out.writeByte(percentComplete);

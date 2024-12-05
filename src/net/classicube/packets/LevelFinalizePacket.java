@@ -15,7 +15,7 @@ public class LevelFinalizePacket extends Packet {
 
     @Override
     public void write(DataOutputStream out) throws IOException {
-        out.writeByte(type.getId());
+        super.write(out);
         out.writeShort(xSize);
         out.writeShort(ySize);
         out.writeShort(zSize);

@@ -16,7 +16,7 @@ public class PlayerIdentificationPacket extends Packet {
 
     @Override
     public void write(DataOutputStream out) throws IOException {
-        out.writeByte(type.getId());
+        super.write(out);
         out.writeByte(protocolVersion);
         Packet.writeString(out, username);
         Packet.writeString(out, verificationKey);

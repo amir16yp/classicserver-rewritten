@@ -16,7 +16,7 @@ public class ServerIdentificationPacket extends Packet {
 
     @Override
     public void write(DataOutputStream out) throws IOException {
-        out.writeByte(type.getId());
+        super.write(out);
         out.writeByte(protocolVersion);
         Packet.writeString(out, serverName);
         Packet.writeString(out, serverMOTD);

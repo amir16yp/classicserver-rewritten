@@ -19,7 +19,7 @@ public class SpawnPlayerPacket extends Packet {
 
     @Override
     public void write(DataOutputStream out) throws IOException {
-        out.writeByte(type.getId());
+        super.write(out);
         out.writeByte(playerId);
         Packet.writeString(out, playerName);
         out.writeShort(x);

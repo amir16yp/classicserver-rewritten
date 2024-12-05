@@ -20,7 +20,7 @@ public class SetBlockClientPacket extends Packet {
 
     @Override
     public void write(DataOutputStream out) throws IOException {
-        out.writeByte(type.getId());
+        super.write(out);
         out.writeShort(x);
         out.writeShort(y);
         out.writeShort(z);

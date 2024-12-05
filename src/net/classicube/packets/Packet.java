@@ -29,7 +29,9 @@ public abstract class Packet {
         return type;
     }
 
-    public abstract void write(DataOutputStream out) throws IOException;
+    public void write(DataOutputStream out) throws IOException {
+        out.writeByte(this.getType().getId());
+    }
 
     public abstract void read(DataInputStream in) throws IOException;
 }
