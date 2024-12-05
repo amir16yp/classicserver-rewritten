@@ -3,6 +3,8 @@ package net.classicube.api;
 import net.classicube.ClientHandler;
 import net.classicube.packets.MessagePacket;
 import net.classicube.packets.ServerPositionPacket;
+import net.classicube.packets.cpe.MakeSelectionPacket;
+import net.classicube.packets.cpe.RemoveSelectionPacket;
 
 import java.io.IOException;
 import java.util.Map;
@@ -13,6 +15,8 @@ import static net.classicube.api.API.splitMessage;
 public class Player implements CommandSender {
     private static final Map<ClientHandler, Player> playerCache = new ConcurrentHashMap<>();
     private final ClientHandler handle;
+    private final Map<Byte, BlockSelection> activeSelections = new ConcurrentHashMap<>();
+    private byte nextSelectionID = 0;
 
     private Player(ClientHandler handle) {
         this.handle = handle;
@@ -34,6 +38,41 @@ public class Player implements CommandSender {
     public String getUsername() {
         return handle.getUsername();
     }
+
+    public void sendSelection(BlockSelection blockSelection) {
+        if (activeSelections.size() >= 127) {
+            removeOldestSelection();
+        }
+
+        blockSelection.setSelectionId(nextSelectionID);
+        activeSelections.put(nextSelectionID, blockSelection);
+
+        MakeSelectionPacket packet = new MakeSelectionPacket(blockSelection);
+        try {
+            handle.sendPacket(packet);
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to send selection packet", e);
+        }
+
+        nextSelectionID = (byte) ((nextSelectionID + 1) % 127);
+    }
+
+    public void removeSelection(byte selectionId) {
+        if (activeSelections.remove(selectionId) != null) {
+            RemoveSelectionPacket packet = new RemoveSelectionPacket(selectionId);
+            try {
+                handle.sendPacket(packet);
+            } catch (IOException e) {
+                throw new RuntimeException("Failed to send remove selection packet", e);
+            }
+        }
+    }
+
+    private void removeOldestSelection() {
+        byte oldestID = activeSelections.keySet().iterator().next();
+        removeSelection(oldestID);
+    }
+
 
     public void teleport(Location location) {
         ServerPositionPacket positionPacket = new ServerPositionPacket();
