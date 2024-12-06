@@ -119,7 +119,7 @@ public class ClientHandler implements Runnable {
             }
             packet.write(out);
             out.flush();
-            System.out.println("SENT " + packet.getType().name() + " TO " + username);
+            //System.out.println("SENT " + packet.getType().name() + " TO " + username);
         }
     }
 

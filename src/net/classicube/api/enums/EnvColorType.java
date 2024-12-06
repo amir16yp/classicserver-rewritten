@@ -1,7 +1,6 @@
 package net.classicube.api.enums;
 
-public enum EnvColorType
-{
+public enum EnvColorType {
     SKY_COLOR((byte) 0),
     CLOUD_COLOR((byte) 1),
     FOG_COLOR((byte) 2),
@@ -11,24 +10,20 @@ public enum EnvColorType
 
     private final byte value;
 
-    EnvColorType(byte value)
-    {
+    EnvColorType(byte value) {
         this.value = value;
     }
 
-    public byte getValue() {
-        return value;
-    }
-
-    public static EnvColorType fromValue(byte value)
-    {
-        for (EnvColorType colorType : values())
-        {
-            if (value == colorType.getValue())
-            {
+    public static EnvColorType fromValue(byte value) {
+        for (EnvColorType colorType : values()) {
+            if (value == colorType.getValue()) {
                 return colorType;
             }
         }
         return null;
+    }
+
+    public byte getValue() {
+        return value;
     }
 }

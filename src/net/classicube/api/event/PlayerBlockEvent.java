@@ -4,8 +4,7 @@ import net.classicube.api.Location;
 import net.classicube.api.Player;
 import net.classicube.api.enums.BlockType;
 
-public class PlayerBlockEvent extends Event
-{
+public class PlayerBlockEvent extends Event {
     protected final Player player;
     protected final Location blockLocation;
     protected BlockType blockType;
