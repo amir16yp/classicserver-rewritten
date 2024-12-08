@@ -78,7 +78,7 @@ public class HeartbeatManager {
                     "&public=" + "true" +
                     "&salt=" + salt +
                     "&users=" + ClientHandler.getClientCount() +
-                    "&software=" + URLEncoder.encode("JavaServerRewritten", StandardCharsets.UTF_8.toString());
+                    "&software=" + URLEncoder.encode(MinecraftClassicServer.APP_NAME, StandardCharsets.UTF_8.toString());
 
             URL url = new URL(urlBuilder);
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();

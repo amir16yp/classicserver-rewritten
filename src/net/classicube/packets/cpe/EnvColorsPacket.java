@@ -7,7 +7,7 @@ import java.awt.*;
 import java.io.DataOutputStream;
 import java.io.IOException;
 
-public class EnvColorsPacket extends CPEPacket{
+public class EnvColorsPacket extends CPEPacket {
     private final EnvColorType colorType;
     private final Color color;
 

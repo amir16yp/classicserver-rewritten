@@ -41,8 +41,7 @@ public class LevelGenerator {
             return BlockType.BEDROCK; // Bedrock
         } else if (y == 1) {
             return BlockType.STATIONARY_LAVA;
-        } else if (y == 2)
-        {
+        } else if (y == 2) {
             return BlockType.GLASS;
         } else {
             return BlockType.AIR;

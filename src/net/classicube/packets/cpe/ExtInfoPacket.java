@@ -8,8 +8,6 @@ import java.io.IOException;
 
 public class ExtInfoPacket extends CPEPacket {
 
-    private static final String appName = "JavaClassicServer";
-
     public ExtInfoPacket() {
         super(PacketType.CPE_EXTINFO);
     }

@@ -1,19 +1,22 @@
 package net.classicube;
 
 import net.classicube.api.API;
-import net.classicube.api.enums.BlockType;
+import net.classicube.api.Location;
 import net.classicube.api.Player;
+import net.classicube.api.enums.BlockType;
 import net.classicube.api.event.EventRegistry;
+import net.classicube.api.event.PlayerBreakBlockEvent;
 import net.classicube.api.event.PlayerJoinEvent;
+import net.classicube.api.event.PlayerPlaceBlockEvent;
 import net.classicube.level.Level;
 import net.classicube.packets.*;
 import net.classicube.packets.cpe.CPEPacket;
 import net.classicube.packets.cpe.ExtAddPlayerNamePacket;
-import net.classicube.packets.cpe.ExtInfoPacket;
 import net.classicube.packets.cpe.ExtRemovePlayerNamePacket;
 
 import java.io.*;
 import java.net.Socket;
+import java.net.SocketException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.concurrent.ConcurrentHashMap;
@@ -115,6 +118,7 @@ public class ClientHandler implements Runnable {
             }
             packet.write(out);
             out.flush();
+            //System.out.println("SENT " + packet.getType().name() + " TO " + username);
         }
     }
 
@@ -165,8 +169,7 @@ public class ClientHandler implements Runnable {
         PlayerIdentificationPacket packet = new PlayerIdentificationPacket();
         readPacket(packet);
         this.supportsCPE = packet.getPaddingByte() == 0x42;
-        sendPacket(new ExtInfoPacket());
-        //sendCPEEntries();
+
         if (packet.getProtocolVersion() != server.getProtocolVersion()) {
             disconnectPlayer("Incompatible protocol version");
             return false;
@@ -219,6 +222,7 @@ public class ClientHandler implements Runnable {
         sendLevelInitialize();
         sendCompressedLevelData();
         sendLevelFinalize();
+
     }
 
     private void sendLevelInitialize() throws IOException {
@@ -226,20 +230,33 @@ public class ClientHandler implements Runnable {
     }
 
     private void sendCompressedLevelData() throws IOException {
-        byte[] levelData = server.getLevel().getBlockData();
-        byte[] compressedData = compressLevelData(levelData);
-        int chunkSize = 1024;
-        int totalChunks = (compressedData.length + chunkSize - 1) / chunkSize;
+        try {
+            byte[] levelData = server.getLevel().getBlockData();
+            byte[] compressedData = compressLevelData(levelData);
+            int chunkSize = 1024;
+            int totalChunks = (compressedData.length + chunkSize - 1) / chunkSize;
 
-        for (int i = 0, chunkIndex = 0; i < compressedData.length; i += chunkSize, chunkIndex++) {
-            LevelDataChunkPacket chunkPacket = new LevelDataChunkPacket();
-            int remainingBytes = Math.min(chunkSize, compressedData.length - i);
-            chunkPacket.setChunkLength((short) remainingBytes);
-            byte[] chunkData = new byte[chunkSize];
-            System.arraycopy(compressedData, i, chunkData, 0, remainingBytes);
-            chunkPacket.setChunkData(chunkData);
-            chunkPacket.setPercentComplete((byte) ((chunkIndex + 1) * 100 / totalChunks));
-            sendPacket(chunkPacket);
+            for (int i = 0, chunkIndex = 0; i < compressedData.length; i += chunkSize, chunkIndex++) {
+                try {
+                    LevelDataChunkPacket chunkPacket = new LevelDataChunkPacket();
+                    int remainingBytes = Math.min(chunkSize, compressedData.length - i);
+                    chunkPacket.setChunkLength((short) remainingBytes);
+
+                    byte[] chunkData = new byte[chunkSize];
+                    System.arraycopy(compressedData, i, chunkData, 0, remainingBytes);
+
+                    chunkPacket.setChunkData(chunkData);
+                    chunkPacket.setPercentComplete((byte) ((chunkIndex + 1) * 100 / totalChunks));
+
+                    sendPacket(chunkPacket);
+                } catch (SocketException e) {
+                    System.err.println("Socket error during level transmission for " + username + ": " + e.getMessage());
+                    throw e;
+                }
+            }
+        } catch (IOException e) {
+            System.err.println("Failed to send level data to " + username + ": " + e.getMessage());
+            throw e;
         }
     }
 
@@ -444,13 +461,7 @@ public class ClientHandler implements Runnable {
         }
 
         BlockType blockType = packet.getBlockType();
-        if (blockType == null) {
-            return false;
-        }
-        if (blockType == BlockType.BEDROCK && packet.getMode().isDestroy()) {
-            return Player.getInstance(this).isOP(); // allow only OPs to destroy bedrock
-        }
-        return true;
+        return blockType != null;
     }
 
     // Disconnection and cleanup
@@ -490,15 +501,28 @@ public class ClientHandler implements Runnable {
         try {
             SetBlockClientPacket packet = new SetBlockClientPacket();
             readPacket(packet);
+            Player player = Player.getInstance(this);
+            Location blockLocation = Location.fromBlockCoordinates(packet.getX(), packet.getY(), packet.getZ());
+
             if (isValidBlockChange(packet)) {
                 BlockType currentBlockType = this.server.getBlock(packet.getX(), packet.getY(), packet.getZ());
 
                 if (packet.getMode().isDestroy()) {  // Destroy block
-                    this.server.setBlock(packet.getX(), packet.getY(), packet.getZ(), BlockType.AIR);
-                    broadcastBlockChange(packet.getX(), packet.getY(), packet.getZ(), BlockType.AIR);
+                    PlayerBreakBlockEvent breakEvent = new PlayerBreakBlockEvent(player, blockLocation, currentBlockType);
+                    EventRegistry.callEvent(breakEvent);
+
+                    if (!breakEvent.isCancelled()) {
+                        this.server.setBlock(packet.getX(), packet.getY(), packet.getZ(), BlockType.AIR);
+                        broadcastBlockChange(packet.getX(), packet.getY(), packet.getZ(), BlockType.AIR);
+                    }
                 } else if (packet.getMode().isPlace()) {  // Create block
-                    this.server.setBlock(packet.getX(), packet.getY(), packet.getZ(), packet.getBlockType());
-                    broadcastBlockChange(packet.getX(), packet.getY(), packet.getZ(), packet.getBlockType());
+                    PlayerPlaceBlockEvent placeEvent = new PlayerPlaceBlockEvent(player, blockLocation, packet.getBlockType());
+                    EventRegistry.callEvent(placeEvent);
+
+                    if (!placeEvent.isCancelled()) {
+                        this.server.setBlock(packet.getX(), packet.getY(), packet.getZ(), placeEvent.getBlockType());
+                        broadcastBlockChange(packet.getX(), packet.getY(), packet.getZ(), placeEvent.getBlockType());
+                    }
                 }
             } else {
                 BlockType currentBlockType = this.server.getBlock(packet.getX(), packet.getY(), packet.getZ());
