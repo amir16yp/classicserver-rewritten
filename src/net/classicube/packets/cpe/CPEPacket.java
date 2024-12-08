@@ -14,7 +14,7 @@ public class CPEPacket extends Packet {
 
     @Override
     public void write(DataOutputStream out) throws IOException {
-
+        super.write(out);
     }
 
     @Override

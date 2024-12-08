@@ -33,7 +33,6 @@ public class ClientHandler implements Runnable {
     private short x, y, z;
     private byte yaw, pitch;
     private boolean supportsCPE;
-
     public ClientHandler(Socket socket, MinecraftClassicServer server) {
         this.socket = socket;
         this.server = server;
