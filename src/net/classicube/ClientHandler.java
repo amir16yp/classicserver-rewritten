@@ -23,24 +23,25 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.zip.GZIPOutputStream;
 
 public class ClientHandler implements Runnable {
-    private static final ConcurrentHashMap<Byte, ClientHandler> clients = new ConcurrentHashMap<>();
+    public static final ConcurrentHashMap<Byte, ClientHandler> clients = new ConcurrentHashMap<>();
     private static byte nextPlayerId = 0;
-    private final Socket socket;
+    protected final Socket socket;
+    protected final Object writeLock = new Object();
+    protected final Object readLock = new Object();
     private final MinecraftClassicServer server;
-    private final Object writeLock = new Object();
-    private final Object readLock = new Object();
     private final byte playerId;
-    private DataInputStream in;
-    private DataOutputStream out;
+    protected DataInputStream in;
+    protected DataOutputStream out;
+    protected boolean supportsCPE;
     private String username;
     private short x, y, z;
     private byte yaw, pitch;
-    private boolean supportsCPE;
 
-    public ClientHandler(Socket socket, MinecraftClassicServer server) {
+    public ClientHandler(Socket socket, MinecraftClassicServer server) throws IOException {
         this.socket = socket;
         this.server = server;
         this.playerId = getNextPlayerId();
+        setupStreams();
         System.out.println("New client connected. Assigned player ID: " + playerId);
     }
 
@@ -140,6 +141,11 @@ public class ClientHandler implements Runnable {
         return id;
     }
 
+    protected void setupStreams() throws IOException {
+        in = new DataInputStream(socket.getInputStream());
+        out = new DataOutputStream(socket.getOutputStream());
+    }
+
     @Override
     public String toString() {
         return "<ID: " + playerId + " NAME: " + username + " IP: " + this.socket.getInetAddress().getHostAddress() + ">";
@@ -175,7 +181,6 @@ public class ClientHandler implements Runnable {
     @Override
     public void run() {
         try {
-            setupStreams();
             if (handlePlayerIdentification()) {
                 sendLevelData();
                 spawnPlayer();
@@ -192,13 +197,9 @@ public class ClientHandler implements Runnable {
         }
     }
 
-    private void setupStreams() throws IOException {
-        in = new DataInputStream(socket.getInputStream());
-        out = new DataOutputStream(socket.getOutputStream());
-    }
-
     private boolean handlePlayerIdentification() throws IOException {
         byte firstPacketId = readPacketId();
+        System.out.println(firstPacketId);
         if (firstPacketId != PacketType.PLAYER_IDENTIFICATION.getId()) {
             disconnectPlayer("Invalid initial packet");
             return false;
@@ -552,7 +553,7 @@ public class ClientHandler implements Runnable {
         }
     }
 
-    private void broadcastDespawn() throws IOException {
+    protected void broadcastDespawn() throws IOException {
         String levelName = server.getLevelManager().getPlayerLevel(Player.getInstance(this));
         DespawnPlayerPacket despawnPacket = new DespawnPlayerPacket();
         despawnPacket.setPlayerId(playerId);

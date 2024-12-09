@@ -74,11 +74,11 @@ public class HeartbeatManager {
         try {
             String urlBuilder = HEARTBEAT_URL + "?port=" + server.getPort() +
                     "&max=" + server.getMaxPlayers() +
-                    "&name=" + URLEncoder.encode(server.getServerName(), StandardCharsets.UTF_8.toString()) +
+                    "&name=" + URLEncoder.encode(server.getServerName()) +
                     "&public=" + "true" +
                     "&salt=" + salt +
                     "&users=" + ClientHandler.getClientCount() +
-                    "&software=" + URLEncoder.encode(MinecraftClassicServer.APP_NAME, StandardCharsets.UTF_8.toString());
+                    "&software=" + URLEncoder.encode(MinecraftClassicServer.APP_NAME);
 
             URL url = new URL(urlBuilder);
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();

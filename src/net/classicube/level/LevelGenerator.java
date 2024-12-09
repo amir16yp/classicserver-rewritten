@@ -1,6 +1,5 @@
 package net.classicube.level;
 
-import net.classicube.api.enums.BlockType;
 import java.util.Random;
 
 public abstract class LevelGenerator {
@@ -30,13 +29,21 @@ public abstract class LevelGenerator {
         Level level = new Level(width, height, depth);
 
         // First fill everything with air
-        level.clearArea(0, 0, 0, width-1, height-1, depth-1);
+        level.clearArea(0, 0, 0, width - 1, height - 1, depth - 1);
 
         return level;
     }
 
     // Getters
-    public short getWidth() { return width; }
-    public short getHeight() { return height; }
-    public short getDepth() { return depth; }
+    public short getWidth() {
+        return width;
+    }
+
+    public short getHeight() {
+        return height;
+    }
+
+    public short getDepth() {
+        return depth;
+    }
 }

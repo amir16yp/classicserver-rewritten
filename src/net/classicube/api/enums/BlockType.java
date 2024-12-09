@@ -67,10 +67,9 @@ public enum BlockType {
         return null; // return null, this is useful for checking if a block id is valid
     }
 
-    public static BlockType getByName(String name)
-    {
+    public static BlockType getByName(String name) {
         for (BlockType type : values()) {
-            if (type.name().equals( name)) {
+            if (type.name().equals(name)) {
                 return type;
             }
         }
