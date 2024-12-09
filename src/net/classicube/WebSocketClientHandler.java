@@ -29,11 +29,6 @@ public class WebSocketClientHandler extends ClientHandler {
         this.out = new DataOutputStream(new WebSocketOutputStream(this.socket.getOutputStream()));
     }
 
-
-    public void handleIncomingData(byte[] data) {
-        System.out.println("Received WebSocket data: " + bytesToHex(data));
-    }
-
     private class WebSocketInputStream extends InputStream {
         private final InputStream source;
         private ByteArrayInputStream buffer;

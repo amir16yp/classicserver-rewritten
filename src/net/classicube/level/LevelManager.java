@@ -58,7 +58,7 @@ public class LevelManager {
         }
 
         // Generate new level
-        Level level = new BackroomsGenerator(width, height, depth).generateLevel();
+        Level level = new FlatLevelGenerator(width, height, depth).generateLevel();
         level.setName(name);
         levels.put(name, level);
 
