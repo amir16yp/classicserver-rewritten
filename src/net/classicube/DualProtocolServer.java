@@ -55,31 +55,49 @@ public class DualProtocolServer {
     private void setupWebguest() throws IOException {
         String response = new String(readBytesFromResource("/net/classicube/webclient.html"));
 
-        if (!MinecraftClassicServer.ENABLE_HEARTBEAT && !mcServer.getConfig().getWebGuestDomain().isEmpty()) {
-            response = response.replaceAll("\\[\\[HOST]]", mcServer.getConfig().getWebGuestDomain());
-        } else if (MinecraftClassicServer.ENABLE_HEARTBEAT && mcServer.getConfig().getWebGuestDomain().isEmpty()) {
-            String publicIP = getPublicIP();
-            System.out.println("Heartbeat enabled but no domain specified, using public IP " + publicIP + " for  web guests");
-            response = response.replaceAll("\\[\\[HOST]]", getPublicIP());
-        } else {
-            response = response.replaceAll("\\[\\[HOST]]", getListeningIP());
-        }
+        String host = determineHost();
+        response = response.replaceAll("\\[\\[HOST]]", host);
 
-        response = response.replaceAll("\\[\\[IPADDR]]", getListeningIP())
-                .replaceAll("\\[\\[PORT]]", String.valueOf(this.mcServer.getPort()));
+        String ipAddr = getListeningIP();
+        response = response.replaceAll("\\[\\[IPADDR]]", ipAddr);
+        response = response.replaceAll("\\[\\[PORT]]", String.valueOf(mcServer.getPort()));
 
-        this.webCache.put("/", new CachedResponse(response.getBytes(), "text/html"));        File texFile = new File("webtex.zip");
-        if (texFile.exists())
-        {
+        this.webCache.put("/", new CachedResponse(response.getBytes(), "text/html"));
+
+        File texFile = new File("webtex.zip");
+        if (texFile.exists()) {
             this.webCache.put("/static/default.zip", new CachedResponse(readStreamFully(texFile.toURL().openStream()), "application/zip"));
         } else {
-            byte[] webTex = readStreamFully(new URL("http://www.classicube.net/static/default.zip").openStream());
+            byte[] webTex = fetchWebTex();
             this.webCache.put("/static/default.zip", new CachedResponse(webTex, "application/zip"));
-            try (FileOutputStream fos = new FileOutputStream(texFile)) {
-                fos.write(webTex);
-            }
+            saveWebTex(texFile, webTex);
         }
     }
+
+    private String determineHost() {
+        if (!mcServer.getConfig().getWebGuestDomain().isEmpty()) {
+            return mcServer.getConfig().getWebGuestDomain();
+        } else {
+            String publicIP = getPublicIP();
+            System.out.println("but no domain specified, using public IP " + publicIP + " for web guests");
+            return publicIP;
+        }
+    }
+
+    private byte[] fetchWebTex() throws IOException {
+        try (InputStream inputStream = new URL("http://www.classicube.net/static/default.zip").openStream()) {
+            return readStreamFully(inputStream);
+        }
+    }
+
+    private void saveWebTex(File texFile, byte[] webTex) {
+        try (FileOutputStream fos = new FileOutputStream(texFile)) {
+            fos.write(webTex);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
 
     private void startConnectionListener() {
         new Thread(() -> {
