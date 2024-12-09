@@ -56,10 +56,7 @@ public class DualProtocolServer {
         String response = new String(readBytesFromResource("/net/classicube/webclient.html"));
 
         String host = determineHost();
-        response = response.replaceAll("\\[\\[HOST]]", host);
-
-        String ipAddr = getListeningIP();
-        response = response.replaceAll("\\[\\[IPADDR]]", ipAddr);
+        response = response.replaceAll("\\[\\[IPADDR]]", host);
         response = response.replaceAll("\\[\\[PORT]]", String.valueOf(mcServer.getPort()));
 
         this.webCache.put("/", new CachedResponse(response.getBytes(), "text/html"));
@@ -75,7 +72,8 @@ public class DualProtocolServer {
     }
 
     private String determineHost() {
-        if (!mcServer.getConfig().getWebGuestDomain().isEmpty()) {
+        if (!mcServer.getConfig().getWebGuestDomain().isEmpty())
+        {
             return mcServer.getConfig().getWebGuestDomain();
         } else {
             String publicIP = getPublicIP();
