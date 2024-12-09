@@ -1,6 +1,5 @@
 package net.classicube.packets.cpe;
 
-import net.classicube.packets.Packet;
 import net.classicube.packets.PacketType;
 
 import java.io.DataOutputStream;
@@ -14,8 +13,7 @@ public class HackControlPacket extends CPEPacket {
     private final boolean thirdPerson;
     private final short jumpHeight;
 
-    public HackControlPacket(boolean flying, boolean noclip, boolean speeding,boolean spawnControl, boolean thirdPerson, short jumpHeight)
-    {
+    public HackControlPacket(boolean flying, boolean noclip, boolean speeding, boolean spawnControl, boolean thirdPerson, short jumpHeight) {
         super(PacketType.CPE_HACK_CONTROL);
         this.flying = flying;
         this.noclip = noclip;
@@ -25,7 +23,7 @@ public class HackControlPacket extends CPEPacket {
         this.jumpHeight = jumpHeight;
     }
 
-    public static byte boolToByte(boolean value) {
+    private static byte boolToByte(boolean value) {
         return (byte) (value ? 1 : 0);
     }
 

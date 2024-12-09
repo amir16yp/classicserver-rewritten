@@ -1,7 +1,5 @@
 package net.classicube.api;
 
-import net.classicube.api.enums.BlockType;
-
 public class Location {
     private final short x, y, z;
     private final short rawX;
@@ -60,22 +58,12 @@ public class Location {
         return rawZ;
     }
 
-    public BlockType getBlockType() {
-        return API.getInstance().getServer().getBlock(x, y, z);
-    }
-
-    public void setBlockType(BlockType newBlockType) {
-        API.getInstance().getServer().setBlock(x, y, z, newBlockType);
-    }
-
     @Override
     public String toString() {
         return "Location{" +
                 "x=" + x +
                 ", y=" + y +
-                ", z=" + z +
-                ", block=" + getBlockType().name() +
-                '}';
+                ", z=" + z + '}';
     }
 
     public Location add(short dx, short dy, short dz) {

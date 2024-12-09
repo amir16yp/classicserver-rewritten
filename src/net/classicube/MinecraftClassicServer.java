@@ -4,9 +4,9 @@ import net.classicube.api.API;
 import net.classicube.api.CommandSender;
 import net.classicube.api.ConsoleCommandSender;
 import net.classicube.api.PluginLoader;
-import net.classicube.api.enums.BlockType;
 import net.classicube.level.Level;
 import net.classicube.level.LevelGenerator;
+import net.classicube.level.LevelManager;
 import net.classicube.packets.DisconnectPlayerPacket;
 
 import java.io.DataOutputStream;
@@ -32,13 +32,13 @@ public class MinecraftClassicServer {
     private final String serverName;
     private final String serverMotd;
     private final int maxPlayers;
-    private final Level level;
     private final ServerSocket serverSocket;
     private final Object levelLock;
     private final Timer autoSaveTimer;
     private final Config config;
     private final PlayerList banList = new PlayerList("ban", "banlist.txt");
     private final PlayerList opList = new PlayerList("admin", "oplist.txt");
+    private final LevelManager levelManager;
     private boolean verifyPlayers;      // Set from config
     private boolean isRunning;
     private HeartbeatManager heartbeatManager;
@@ -46,7 +46,7 @@ public class MinecraftClassicServer {
     public MinecraftClassicServer() throws IOException {
         this.config = new Config();
         this.config.loadConfig();
-
+        this.levelManager = new LevelManager();
         this.port = config.getPort();
         this.protocolVersion = 0x07;
         this.serverName = config.getServerName();
@@ -54,8 +54,6 @@ public class MinecraftClassicServer {
         this.maxPlayers = config.getMaxPlayers();
         this.verifyPlayers = config.isVerifyPlayers();
         ENABLE_HEARTBEAT = config.isEnableHeartbeat();
-
-        this.level = loadOrGenerateLevel();
         this.serverSocket = new ServerSocket(port);
         this.levelLock = new Object();
         this.isRunning = false;
@@ -66,12 +64,56 @@ public class MinecraftClassicServer {
             this.heartbeatManager.start();
         }
 
+        // Load all existing levels
+        loadAllLevels();
+
+        // Create main level if it doesn't exist
+        if (!levelManager.levelExists("main")) {
+            System.out.println("Creating new main level...");
+            levelManager.createLevel("main",
+                    (short) config.getLevelWidth(),
+                    (short) config.getLevelHeight(),
+                    (short) config.getLevelLength());
+        }
         API.initializeAPI(this);
     }
 
     public static void main(String[] args) throws IOException {
         MinecraftClassicServer server = new MinecraftClassicServer();
         server.start();
+    }
+
+    public LevelManager getLevelManager() {
+        return levelManager;
+    }
+
+    private void loadAllLevels() {
+        Path levelsPath = Paths.get("levels");
+        if (!Files.exists(levelsPath)) {
+            try {
+                Files.createDirectories(levelsPath);
+            } catch (IOException e) {
+                System.err.println("Failed to create levels directory: " + e.getMessage());
+                return;
+            }
+        }
+
+        try {
+            Files.list(levelsPath)
+                    .filter(path -> path.toString().toLowerCase().endsWith(".dat"))
+                    .forEach(path -> {
+                        String levelName = path.getFileName().toString();
+                        levelName = levelName.substring(0, levelName.length() - 4); // Remove .dat
+
+                        try {
+                            levelManager.loadLevel(levelName);
+                        } catch (IOException e) {
+                            System.err.println("Failed to load level " + levelName + ": " + e.getMessage());
+                        }
+                    });
+        } catch (IOException e) {
+            System.err.println("Error scanning levels directory: " + e.getMessage());
+        }
     }
 
     public boolean isVerifyPlayers() {
@@ -160,14 +202,7 @@ public class MinecraftClassicServer {
     }
 
     public void saveLevel() {
-        synchronized (levelLock) {
-            try {
-                level.saveToFile(LEVEL_FILE);
-                System.out.println("Level saved to " + LEVEL_FILE);
-            } catch (IOException e) {
-                System.out.println("Failed to save level: " + e.getMessage());
-            }
-        }
+        levelManager.saveAllLevels();
     }
 
     public void stop() {
@@ -206,29 +241,6 @@ public class MinecraftClassicServer {
         disconnectPacket.write(new DataOutputStream(clientSocket.getOutputStream()));
         System.out.println("Server is full. Rejecting new connection.");
         clientSocket.close();
-    }
-
-    public void setBlock(short x, short y, short z, byte blockType) {
-        synchronized (levelLock) {
-            level.setBlock(x, y, z, blockType);
-        }
-    }
-
-    public BlockType getBlock(short x, short y, short z) {
-        synchronized (levelLock) {
-            return BlockType.getById(level.getBlock(x, y, z));
-        }
-    }
-
-    public void setBlock(short x, short y, short z, BlockType blockType) {
-        synchronized (levelLock) {
-            level.setBlock(x, y, z, blockType.getId());
-        }
-    }
-
-    // Getters
-    public Level getLevel() {
-        return level;
     }
 
     public String getServerName() {

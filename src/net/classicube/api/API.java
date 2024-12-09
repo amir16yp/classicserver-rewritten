@@ -4,13 +4,17 @@ import net.classicube.ClientHandler;
 import net.classicube.MinecraftClassicServer;
 import net.classicube.api.enums.ChatColors;
 import net.classicube.api.enums.EnvColorType;
+import net.classicube.level.LevelManager;
 import net.classicube.packets.MessagePacket;
 import net.classicube.packets.cpe.EnvColorsPacket;
 import net.classicube.packets.cpe.MakeSelectionPacket;
 
 import java.awt.*;
+import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 public class API {
 
@@ -256,17 +260,144 @@ public class API {
         });
 
         commandRegistry.registerCommand("help", false, (sender, args) -> {
-            return "Available commands:\n" +
-                    "stop - Stops the server\n" +
-                    "save - Saves the world\n" +
-                    "reload - Reloads configuration\n" +
-                    "players - Shows current player count\n" +
-                    "op <player> - Gives operator status\n" +
-                    "deop <player> - Removes operator status\n" +
-                    "ban <player> - Bans a player\n" +
-                    "unban <player> - Unbans a player\n" +
-                    "stats - Shows server statistics\n" +
-                    "help - Shows this help message";
+            StringBuilder helpMessage = new StringBuilder("Available commands:\n");
+
+            // Get all registered commands from the registry
+            Map<String, RegisteredCommand> commands = commandRegistry.getCommands();
+
+            // Sort commands alphabetically
+            List<String> sortedCommands = new ArrayList<>(commands.keySet());
+            Collections.sort(sortedCommands);
+
+            // Build help message
+            for (String cmdName : sortedCommands) {
+                RegisteredCommand cmd = commands.get(cmdName);
+                String opOnly = cmd.isRequiresOp() ? " (OP)" : "";
+                helpMessage.append(cmdName).append(opOnly).append("\n");
+            }
+
+            return helpMessage.toString();
+        });
+
+        commandRegistry.registerCommand("level", false, (sender, args) -> {
+            if (args.length < 1) {
+                return "Usage: /level <list|goto|create|delete>";
+            }
+
+            LevelManager levelManager = server.getLevelManager();
+
+            // Only players can switch levels
+            Player player = (sender instanceof Player) ? (Player) sender : null;
+
+            switch (args[0].toLowerCase()) {
+                case "list":
+                    StringBuilder levels = new StringBuilder("Available levels: ");
+                    for (String name : levelManager.getLevelNames()) {
+                        int playerCount = ClientHandler.getClientsInLevel(name).size();
+                        levels.append(name).append(" (").append(playerCount).append(" players), ");
+                    }
+                    if (player != null) {
+                        levels.append("\nYou are in: ").append(levelManager.getPlayerLevel(player));
+                    }
+                    return levels.toString();
+
+                case "goto":
+                    if (player == null) {
+                        return "Only players can switch levels";
+                    }
+                    if (args.length < 2) {
+                        return "Usage: /level goto <levelname>";
+                    }
+                    String targetLevel = args[1];
+                    if (!levelManager.levelExists(targetLevel)) {
+                        return "Level does not exist: " + targetLevel;
+                    }
+
+                    String currentLevel = levelManager.getPlayerLevel(player);
+                    if (currentLevel.equals(targetLevel)) {
+                        return "You are already in that level!";
+                    }
+
+                    if (levelManager.switchPlayerLevel(player, targetLevel)) {
+                        return "Successfully switched to level: " + targetLevel;
+                    } else {
+                        return "Failed to switch to level: " + targetLevel;
+                    }
+
+                case "create":
+                    if (!sender.isOP()) {
+                        return "Only operators can create levels";
+                    }
+                    if (args.length < 5) {
+                        return "Usage: /level create <name> <width> <height> <depth>";
+                    }
+                    try {
+                        String name = args[1];
+                        if (levelManager.levelExists(name)) {
+                            return "Level already exists: " + name;
+                        }
+                        short width = Short.parseShort(args[2]);
+                        short height = Short.parseShort(args[3]);
+                        short depth = Short.parseShort(args[4]);
+
+                        // Validate dimensions
+                        if (width < 16 || height < 16 || depth < 16) {
+                            return "Dimensions must be at least 16";
+                        }
+                        if (width > 1024 || height > 1024 || depth > 1024) {
+                            return "Dimensions must not exceed 1024";
+                        }
+
+                        levelManager.createLevel(name, width, height, depth);
+                        return "Created new level: " + name + " (" + width + "x" + height + "x" + depth + ")";
+                    } catch (NumberFormatException e) {
+                        return "Invalid dimensions. Must be numbers between 16 and 1024";
+                    } catch (IOException e) {
+                        return "Failed to create level: " + e.getMessage();
+                    }
+
+                case "delete":
+                    if (!sender.isOP()) {
+                        return "Only operators can delete levels";
+                    }
+                    if (args.length < 2) {
+                        return "Usage: /level delete <name>";
+                    }
+                    String levelToDelete = args[1];
+                    if (!levelManager.levelExists(levelToDelete)) {
+                        return "Level does not exist: " + levelToDelete;
+                    }
+                    if (levelToDelete.equals("main")) {
+                        return "Cannot delete the main level";
+                    }
+                    try {
+                        if (!ClientHandler.getClientsInLevel(levelToDelete).isEmpty()) {
+                            return "Cannot delete level while players are in it";
+                        }
+                        levelManager.deleteLevel(levelToDelete);
+                        return "Deleted level: " + levelToDelete;
+                    } catch (IOException e) {
+                        return "Failed to delete level: " + e.getMessage();
+                    }
+
+                case "info":
+                    if (args.length < 2) {
+                        if (player == null) {
+                            return "Usage: /level info <name>";
+                        }
+                        // If no level specified and sender is player, show current level
+                        String currentPlayerLevel = levelManager.getPlayerLevel(player);
+                        return levelManager.getLevel(currentPlayerLevel).toString();
+                    }
+                    String levelName = args[1];
+                    if (!levelManager.levelExists(levelName)) {
+                        return "Level does not exist: " + levelName;
+                    }
+                    return levelManager.getLevel(levelName).toString();
+
+                default:
+                    return "Unknown subcommand. Available: list, goto, create, delete, info";
+            }
         });
     }
 

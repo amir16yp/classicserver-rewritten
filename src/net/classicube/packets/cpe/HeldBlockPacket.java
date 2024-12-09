@@ -6,8 +6,7 @@ import net.classicube.packets.PacketType;
 import java.io.DataOutputStream;
 import java.io.IOException;
 
-public class HeldBlockPacket extends CPEPacket
-{
+public class HeldBlockPacket extends CPEPacket {
 
     private final BlockType blockType;
     private final boolean force;

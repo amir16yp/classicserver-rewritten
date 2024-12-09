@@ -9,8 +9,7 @@ import java.io.IOException;
 public class EnvWeatherPacket extends CPEPacket {
     private final WeatherType weatherType;
 
-    public EnvWeatherPacket(WeatherType weatherType)
-    {
+    public EnvWeatherPacket(WeatherType weatherType) {
         super(PacketType.CPE_WEATHER_TYPE);
         this.weatherType = weatherType;
     }

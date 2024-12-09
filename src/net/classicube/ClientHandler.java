@@ -36,6 +36,7 @@ public class ClientHandler implements Runnable {
     private short x, y, z;
     private byte yaw, pitch;
     private boolean supportsCPE;
+
     public ClientHandler(Socket socket, MinecraftClassicServer server) {
         this.socket = socket;
         this.server = server;
@@ -58,6 +59,43 @@ public class ClientHandler implements Runnable {
 
     public static void broadcastPacketExcept(Packet packet, ClientHandler except) {
         for (ClientHandler client : getClients()) {
+            if (client.socket.isConnected() && client != except) {
+                try {
+                    client.sendPacket(packet);
+                } catch (Exception e) {
+                    System.out.println("ERROR SENDING PACKET TO " + client + " " + e.getMessage());
+                    e.printStackTrace();
+                }
+            }
+        }
+    }
+
+    public static Collection<ClientHandler> getClientsInLevel(String levelName) {
+        ArrayList<ClientHandler> clientsInLevel = new ArrayList<>();
+        for (ClientHandler client : getClients()) {
+            String clientLevel = client.server.getLevelManager().getPlayerLevel(Player.getInstance(client));
+            if (levelName.equals(clientLevel)) {
+                clientsInLevel.add(client);
+            }
+        }
+        return clientsInLevel;
+    }
+
+    public static void broadcastPacketToLevel(Packet packet, String levelName) {
+        for (ClientHandler client : getClientsInLevel(levelName)) {
+            if (client.socket.isConnected()) {
+                try {
+                    client.sendPacket(packet);
+                } catch (Exception e) {
+                    System.out.println("ERROR SENDING PACKET TO " + client + " " + e.getMessage());
+                    e.printStackTrace();
+                }
+            }
+        }
+    }
+
+    public static void broadcastPacketToLevelExcept(Packet packet, String levelName, ClientHandler except) {
+        for (ClientHandler client : getClientsInLevel(levelName)) {
             if (client.socket.isConnected() && client != except) {
                 try {
                     client.sendPacket(packet);
@@ -219,19 +257,36 @@ public class ClientHandler implements Runnable {
     }
 
     private void sendLevelData() throws IOException {
+        Level level = getCurrentLevel();
         sendLevelInitialize();
-        sendCompressedLevelData();
-        sendLevelFinalize();
-
+        sendCompressedLevelData(level);
+        sendLevelFinalize(level);
     }
+
+
+    private Level getCurrentLevel() {
+        // First check if player has a specific level assigned
+        Player player = Player.getInstance(this);
+        String levelName = server.getLevelManager().getPlayerLevel(player);
+
+        // If no specific level, use the "main" level
+        if (levelName == null) {
+            levelName = "main";
+            // Set the player's initial level
+            server.getLevelManager().setPlayerLevel(player, levelName);
+        }
+
+        return server.getLevelManager().getLevel(levelName);
+    }
+
 
     private void sendLevelInitialize() throws IOException {
         sendPacket(new LevelInitializePacket());
     }
 
-    private void sendCompressedLevelData() throws IOException {
+    private void sendCompressedLevelData(Level level) throws IOException {
         try {
-            byte[] levelData = server.getLevel().getBlockData();
+            byte[] levelData = level.getBlockData();
             byte[] compressedData = compressLevelData(levelData);
             int chunkSize = 1024;
             int totalChunks = (compressedData.length + chunkSize - 1) / chunkSize;
@@ -274,11 +329,8 @@ public class ClientHandler implements Runnable {
         return compressedBaos.toByteArray();
     }
 
-    private void sendLevelFinalize() throws IOException {
+    private void sendLevelFinalize(Level level) throws IOException {
         LevelFinalizePacket finalizePacket = new LevelFinalizePacket();
-
-        Level level = this.server.getLevel();
-
         finalizePacket.setXSize(level.getWidth());
         finalizePacket.setYSize(level.getHeight());
         finalizePacket.setZSize(level.getDepth());
@@ -289,14 +341,15 @@ public class ClientHandler implements Runnable {
         } catch (Exception e) {
             e.printStackTrace();
         }
-
     }
+
 
     // Player spawning methods
     private void spawnPlayer() throws IOException {
-        x = (short) (this.server.getLevel().getWidth() / 2 * 32);
-        y = (short) ((this.server.getLevel().getHeight() / 2 * 32) + 51);
-        z = (short) (this.server.getLevel().getDepth() / 2 * 32);
+        Level level = getCurrentLevel();
+        x = (short) (level.getWidth() / 2 * 32);
+        y = (short) ((level.getHeight() / 2 * 32) + 51);
+        z = (short) (level.getDepth() / 2 * 32);
         yaw = 0;
         pitch = 0;
 
@@ -318,18 +371,20 @@ public class ClientHandler implements Runnable {
         positionPacket.setYaw(yaw);
         positionPacket.setPitch(pitch);
         sendPacket(positionPacket);
-
-        //System.out.println("Spawned player " + username + " (ID: " + playerId + ") at x=" + (x/32.0) + ", y=" + (y/32.0) + ", z=" + (z/32.0));
     }
 
     private void broadcastSpawn() throws IOException {
-        for (ClientHandler client : new ArrayList<>(clients.values())) {
+        String myLevel = server.getLevelManager().getPlayerLevel(Player.getInstance(this));
+
+        // Only broadcast to and receive broadcasts from players in the same level
+        for (ClientHandler client : getClientsInLevel(myLevel)) {
             if (client != this && client.socket.isConnected()) {
                 sendSpawnPacket(client, this);
                 sendSpawnPacket(this, client);
             }
         }
     }
+
 
     private void sendSpawnPacket(ClientHandler receiver, ClientHandler playerToSpawn) throws IOException {
         SpawnPlayerPacket spawnPacket = new SpawnPlayerPacket();
@@ -399,6 +454,7 @@ public class ClientHandler implements Runnable {
     }
 
     private void broadcastPositionUpdate() throws IOException {
+        String levelName = server.getLevelManager().getPlayerLevel(Player.getInstance(this));
         ServerPositionPacket updatePacket = new ServerPositionPacket();
         updatePacket.setPlayerId(playerId);
         updatePacket.setX(x);
@@ -407,8 +463,9 @@ public class ClientHandler implements Runnable {
         updatePacket.setYaw(yaw);
         updatePacket.setPitch(pitch);
 
-        broadcastPacketExcept(updatePacket, this);
+        broadcastPacketToLevelExcept(updatePacket, levelName, this);
     }
+
 
     private void sendPositionCorrection() throws IOException {
         ServerPositionPacket correctPacket = new ServerPositionPacket();
@@ -425,38 +482,43 @@ public class ClientHandler implements Runnable {
     private void handleMessage() throws IOException {
         MessagePacket packet = new MessagePacket();
         readPacket(packet);
+
         if (packet.getMessage().startsWith("/")) {
             API.getInstance().getCommandRegistry().executeCommand(Player.getInstance(this), packet.getMessage().substring(1));
             return;
         }
-        MessagePacket broadcastPacket = new MessagePacket();
 
+        String levelName = server.getLevelManager().getPlayerLevel(Player.getInstance(this));
+        MessagePacket broadcastPacket = new MessagePacket();
         broadcastPacket.setPlayerId(playerId);
         broadcastPacket.setMessage(username + ":" + packet.getMessage());
 
-        broadcastPacket(broadcastPacket);
+        // Only broadcast chat messages to players in the same level
+        broadcastPacketToLevel(broadcastPacket, levelName);
     }
 
     private boolean isValidPosition(short newX, short newY, short newZ) {
+        Level level = getCurrentLevel();
         int blockX = newX / 32;
         int blockY = newY / 32;
         int blockZ = newZ / 32;
 
-        return blockX >= 0 && blockX < this.server.getLevel().getWidth() &&
-                blockY >= 0 && blockY < this.server.getLevel().getHeight() &&
-                blockZ >= 0 && blockZ < this.server.getLevel().getDepth();
+        return blockX >= 0 && blockX < level.getWidth() &&
+                blockY >= 0 && blockY < level.getHeight() &&
+                blockZ >= 0 && blockZ < level.getDepth();
     }
 
+
     private boolean isValidBlockChange(SetBlockClientPacket packet) {
-        if (packet.getX() < 0 || packet.getX() >= this.server.getLevel().getWidth() ||
-                packet.getY() < 0 || packet.getY() >= this.server.getLevel().getHeight() ||
-                packet.getZ() < 0 || packet.getZ() >= this.server.getLevel().getDepth()) {
+        Level level = getCurrentLevel();
+        if (packet.getX() < 0 || packet.getX() >= level.getWidth() ||
+                packet.getY() < 0 || packet.getY() >= level.getHeight() ||
+                packet.getZ() < 0 || packet.getZ() >= level.getDepth()) {
             System.out.println("Invalid block coordinates: " + packet.getX() + ", " + packet.getY() + ", " + packet.getZ());
             return false;
         }
 
-        if (packet.getMode() == null) // if place/destroy mode is invalid
-        {
+        if (packet.getMode() == null) {
             return false;
         }
 
@@ -491,10 +553,11 @@ public class ClientHandler implements Runnable {
     }
 
     private void broadcastDespawn() throws IOException {
+        String levelName = server.getLevelManager().getPlayerLevel(Player.getInstance(this));
         DespawnPlayerPacket despawnPacket = new DespawnPlayerPacket();
         despawnPacket.setPlayerId(playerId);
 
-        broadcastPacketExcept(despawnPacket, this);
+        broadcastPacketToLevelExcept(despawnPacket, levelName, this);
     }
 
     private void handleSetBlock() {
@@ -502,17 +565,18 @@ public class ClientHandler implements Runnable {
             SetBlockClientPacket packet = new SetBlockClientPacket();
             readPacket(packet);
             Player player = Player.getInstance(this);
+            Level currentLevel = getCurrentLevel();
             Location blockLocation = Location.fromBlockCoordinates(packet.getX(), packet.getY(), packet.getZ());
 
             if (isValidBlockChange(packet)) {
-                BlockType currentBlockType = this.server.getBlock(packet.getX(), packet.getY(), packet.getZ());
+                BlockType currentBlockType = BlockType.getById(currentLevel.getBlock(packet.getX(), packet.getY(), packet.getZ()));
 
                 if (packet.getMode().isDestroy()) {  // Destroy block
                     PlayerBreakBlockEvent breakEvent = new PlayerBreakBlockEvent(player, blockLocation, currentBlockType);
                     EventRegistry.callEvent(breakEvent);
 
                     if (!breakEvent.isCancelled()) {
-                        this.server.setBlock(packet.getX(), packet.getY(), packet.getZ(), BlockType.AIR);
+                        currentLevel.setBlock(packet.getX(), packet.getY(), packet.getZ(), BlockType.AIR);
                         broadcastBlockChange(packet.getX(), packet.getY(), packet.getZ(), BlockType.AIR);
                     }
                 } else if (packet.getMode().isPlace()) {  // Create block
@@ -520,12 +584,12 @@ public class ClientHandler implements Runnable {
                     EventRegistry.callEvent(placeEvent);
 
                     if (!placeEvent.isCancelled()) {
-                        this.server.setBlock(packet.getX(), packet.getY(), packet.getZ(), placeEvent.getBlockType());
+                        currentLevel.setBlock(packet.getX(), packet.getY(), packet.getZ(), placeEvent.getBlockType());
                         broadcastBlockChange(packet.getX(), packet.getY(), packet.getZ(), placeEvent.getBlockType());
                     }
                 }
             } else {
-                BlockType currentBlockType = this.server.getBlock(packet.getX(), packet.getY(), packet.getZ());
+                BlockType currentBlockType = BlockType.getById(currentLevel.getBlock(packet.getX(), packet.getY(), packet.getZ()));
                 sendBlockCorrection(packet.getX(), packet.getY(), packet.getZ(), currentBlockType);
             }
         } catch (IOException e) {
@@ -538,14 +602,16 @@ public class ClientHandler implements Runnable {
     }
 
     public void broadcastBlockChange(short x, short y, short z, BlockType blockType) {
+        String levelName = server.getLevelManager().getPlayerLevel(Player.getInstance(this));
         SetBlockServerPacket broadcastPacket = new SetBlockServerPacket();
         broadcastPacket.setX(x);
         broadcastPacket.setY(y);
         broadcastPacket.setZ(z);
         broadcastPacket.setBlockType(blockType.getId());
 
-        broadcastPacket(broadcastPacket);
+        broadcastPacketToLevel(broadcastPacket, levelName);
     }
+
 
     private void sendBlockCorrection(short x, short y, short z, BlockType blockType) {
         try {

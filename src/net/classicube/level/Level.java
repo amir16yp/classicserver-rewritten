@@ -111,4 +111,54 @@ public class Level {
             dos.write(data);
         }
     }
+
+    @Override
+    public String toString() {
+        // Count different block types
+        int[] blockCounts = new int[256];  // 256 possible block types
+        int totalBlocks = 0;
+        for (int x = 0; x < width; x++) {
+            for (int y = 0; y < height; y++) {
+                for (int z = 0; z < depth; z++) {
+                    byte blockType = blocks[x][y][z];
+                    blockCounts[blockType & 0xFF]++;
+                    if (blockType != 0) {  // Don't count air blocks
+                        totalBlocks++;
+                    }
+                }
+            }
+        }
+
+        StringBuilder stats = new StringBuilder();
+        stats.append("Level Statistics:\n");
+        stats.append(String.format("Dimensions: %dx%dx%d\n", width, height, depth));
+        stats.append(String.format("Total volume: %d blocks\n", width * height * depth));
+        stats.append(String.format("Blocks placed: %d (%.1f%%)\n",
+                totalBlocks,
+                (totalBlocks * 100.0f) / (width * height * depth)));
+
+        // Show top 5 most common blocks (excluding air)
+        stats.append("Most common blocks:\n");
+        for (int i = 0; i < 5; i++) {
+            int maxCount = 0;
+            int maxType = 0;
+            for (int type = 1; type < blockCounts.length; type++) {  // Start at 1 to skip air
+                if (blockCounts[type] > maxCount) {
+                    maxCount = blockCounts[type];
+                    maxType = type;
+                }
+            }
+            if (maxCount > 0) {
+                BlockType blockType = BlockType.getById((byte) maxType);
+                String blockName = blockType != null ? blockType.name() : "UNKNOWN";
+                stats.append(String.format("  %s: %d blocks (%.1f%%)\n",
+                        blockName,
+                        maxCount,
+                        (maxCount * 100.0f) / (width * height * depth)));
+                blockCounts[maxType] = 0;  // Reset count so we find next most common
+            }
+        }
+
+        return stats.toString();
+    }
 }
