@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ClassiCube</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: black;
+            width: 100%;
+            height: 100%;
+        }
+        #canvas {
+            display: block;
+            border: 0;
+            padding: 0;
+            background-color: black;
+            width: 100%;
+            height: 100%;
+        }
+        #logmsg {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+    </style>
+</head>
+<body>
+<canvas id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
+<span id="logmsg"></span>
+
+<script type='text/javascript'>
+    var randomUsername = '[Guest]' + Math.floor(Math.random() * 10000); // Generate random username
+    var Module = {
+        preRun: [],
+        postRun: [],
+        arguments: [randomUsername, '', '[[IPADDR]]', '[[PORT]]'],
+        print: function(text) {
+            if (arguments.length > 1) text = Array.prototype.slice.call(arguments).join(' ');
+            console.log(text);
+        },
+        printErr: function(text) {
+            if (arguments.length > 1) text = Array.prototype.slice.call(arguments).join(' ');
+            console.error(text);
+        },
+        canvas: document.getElementById('canvas'),
+        setStatus: function(text) {
+            console.log(text);
+            document.getElementById('logmsg').innerHTML = text;
+        },
+        totalDependencies: 0,
+        monitorRunDependencies: function(left) {
+            this.totalDependencies = Math.max(this.totalDependencies, left);
+            Module.setStatus(left ? 'Preparing... (' + (this.totalDependencies-left) + '/' + this.totalDependencies + ')' : 'All downloads complete.');
+        }
+    };
+    Module.setStatus('Downloading...');
+    window.onerror = function(msg) {
+        Module.setStatus('Exception thrown, see JavaScript console (' + msg + ')');
+        Module.setStatus = function(text) {
+            if (text) Module.printErr('[post-exception status] ' + text);
+        };
+    };
+
+    function resizeCanvas() {
+        var canvas = Module.canvas;
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+</script>
+<script async type="text/javascript" src="https://cs.classicube.net/client/latest/ClassiCube.js"></script>
+</body>
+</html>

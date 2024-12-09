@@ -224,10 +224,23 @@ public class ClientHandler implements Runnable {
 
         if (this.server.isVerifyPlayers()) {
             if (!this.server.verifyPlayer(username, packet.getVerificationKey())) {
-                disconnectPlayer("Name verification failed!");
-                return false;
+                if (this instanceof WebSocketClientHandler) {
+                    // Allow web clients with usernames starting with "[Guest]" to log in without verification
+                    if (server.getConfig().isEnableWebGuests() && username.startsWith("[Guest]")) {
+                        System.out.println("Web client with guest username allowed to log in: " + username);
+                    } else {
+                        disconnectPlayer("Name verification failed!");
+                        return false;
+                    }
+                } else {
+                    // Non-web clients always require verification
+                    disconnectPlayer("Name verification failed!");
+                    return false;
+                }
             }
         }
+
+
         if (this.server.getBanList().contains(username)) {
             disconnectPlayer("You are banned!");
             return false;

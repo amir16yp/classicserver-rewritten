@@ -21,7 +21,6 @@ public class HeartbeatManager {
     private static final long HEARTBEAT_INTERVAL = 45 * 1000; // 45 seconds
     private static final SecureRandom RANDOM = new SecureRandom();
     private static final String SALT_FILE = "server.salt";
-
     private final MinecraftClassicServer server;
     private final String salt;
     private final Timer heartbeatTimer;
@@ -114,6 +113,7 @@ public class HeartbeatManager {
             System.out.println("Failed to send heartbeat: " + e.getMessage());
         }
     }
+
 
     private String loadOrGenerateSalt() {
         Path saltPath = Paths.get(SALT_FILE);

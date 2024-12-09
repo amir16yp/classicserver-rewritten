@@ -16,12 +16,22 @@ public class Config {
     private int maxPlayers = 20;
     private boolean enableHeartbeat = true;
     private boolean verifyPlayers = true;
+    private boolean enableWebGuests = true;
+    private String webGuestDomain = "";
+
     private int levelWidth = 1024;
     private int levelHeight = 64;
     private int levelLength = 1024;
-
     public Config() {
         this.properties = new Properties();
+    }
+
+    public boolean isEnableWebGuests() {
+        return enableWebGuests;
+    }
+
+    public String getWebGuestDomain() {
+        return webGuestDomain;
     }
 
     public void loadConfig() {
@@ -41,6 +51,8 @@ public class Config {
             maxPlayers = Integer.parseInt(properties.getProperty("max-players", String.valueOf(maxPlayers)));
             enableHeartbeat = Boolean.parseBoolean(properties.getProperty("enable-heartbeat", String.valueOf(enableHeartbeat)));
             verifyPlayers = Boolean.parseBoolean(properties.getProperty("verify-players", String.valueOf(verifyPlayers)));
+            enableWebGuests = Boolean.parseBoolean(properties.getProperty("enable-web-guest", String.valueOf(enableWebGuests)));
+            webGuestDomain = String.valueOf(properties.getProperty("web-domain", String.valueOf(webGuestDomain)));
             levelWidth = Integer.parseInt(properties.getProperty("level-width", String.valueOf(levelWidth)));
             levelHeight = Integer.parseInt(properties.getProperty("level-height", String.valueOf(levelHeight)));
             levelLength = Integer.parseInt(properties.getProperty("level-length", String.valueOf(levelLength)));
@@ -58,10 +70,11 @@ public class Config {
         properties.setProperty("max-players", String.valueOf(maxPlayers));
         properties.setProperty("enable-heartbeat", String.valueOf(enableHeartbeat));
         properties.setProperty("verify-players", String.valueOf(verifyPlayers));
+        properties.setProperty("enable-web-guest", String.valueOf(enableWebGuests));
+        properties.setProperty("web-domain", String.valueOf(webGuestDomain));
         properties.setProperty("level-width", String.valueOf(levelWidth));
         properties.setProperty("level-height", String.valueOf(levelHeight));
         properties.setProperty("level-length", String.valueOf(levelLength));
-
         try (FileOutputStream fos = new FileOutputStream(CONFIG_FILE)) {
             properties.store(fos, "Minecraft Classic Server Configuration");
         } catch (IOException e) {

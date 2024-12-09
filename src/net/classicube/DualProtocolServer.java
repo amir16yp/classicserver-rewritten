@@ -1,17 +1,11 @@
 package net.classicube;
 
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.SequenceInputStream;
-import java.net.ServerSocket;
-import java.net.Socket;
+import java.io.*;
+import java.net.*;
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.Arrays;
-import java.util.Base64;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class DualProtocolServer {
@@ -21,10 +15,70 @@ public class DualProtocolServer {
     private final Map<Socket, WebSocketClientHandler> wsClients = new ConcurrentHashMap<>();
     private volatile boolean running = true;
 
+    private final Map<String, CachedResponse> webCache = new ConcurrentHashMap<>();
+
+    public String getPublicIP() {
+        try {
+            URL url = new URL("https://classicube.net/api/myip");
+            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestMethod("GET");
+
+            BufferedReader in = new BufferedReader(new InputStreamReader(connection.getInputStream()));
+            String inputLine;
+            StringBuilder response = new StringBuilder();
+
+            while ((inputLine = in.readLine()) != null) {
+                response.append(inputLine);
+            }
+            in.close();
+
+            return response.toString().trim(); // Return the public IP
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null; // Return null or fallback if there is an error
+        }
+    }
+
+
     public DualProtocolServer(MinecraftClassicServer mcServer, int port) throws IOException {
         this.mcServer = mcServer;
         this.serverSocket = new ServerSocket(port);
+        this.webCache.put("/", new CachedResponse("WEB GUEST DISABELD".getBytes(), "text/html"));
+        if (this.mcServer.getConfig().isEnableWebGuests())
+        {
+            setupWebguest();
+        }
+
         startConnectionListener();
+    }
+
+    private void setupWebguest() throws IOException {
+        String response = new String(readBytesFromResource("/net/classicube/webclient.html"));
+
+        if (!MinecraftClassicServer.ENABLE_HEARTBEAT && !mcServer.getConfig().getWebGuestDomain().isEmpty()) {
+            response = response.replaceAll("\\[\\[HOST]]", mcServer.getConfig().getWebGuestDomain());
+        } else if (MinecraftClassicServer.ENABLE_HEARTBEAT && mcServer.getConfig().getWebGuestDomain().isEmpty()) {
+            String publicIP = getPublicIP();
+            System.out.println("Heartbeat enabled but no domain specified, using public IP " + publicIP + " for  web guests");
+            response = response.replaceAll("\\[\\[HOST]]", getPublicIP());
+        } else {
+            response = response.replaceAll("\\[\\[HOST]]", getListeningIP());
+        }
+
+        response = response.replaceAll("\\[\\[IPADDR]]", getListeningIP())
+                .replaceAll("\\[\\[PORT]]", String.valueOf(this.mcServer.getPort()));
+
+        this.webCache.put("/", new CachedResponse(response.getBytes(), "text/html"));        File texFile = new File("webtex.zip");
+        if (texFile.exists())
+        {
+            this.webCache.put("/static/default.zip", new CachedResponse(readStreamFully(texFile.toURL().openStream()), "application/zip"));
+        } else {
+            byte[] webTex = readStreamFully(new URL("http://www.classicube.net/static/default.zip").openStream());
+            this.webCache.put("/static/default.zip", new CachedResponse(webTex, "application/zip"));
+            try (FileOutputStream fos = new FileOutputStream(texFile)) {
+                fos.write(webTex);
+            }
+        }
     }
 
     private void startConnectionListener() {
@@ -71,16 +125,69 @@ public class DualProtocolServer {
         }
     }
 
+    private static byte[] readBytesFromResource(String resourcePath) throws IOException {
+        try (InputStream inputStream = DualProtocolServer.class.getResourceAsStream(resourcePath)) {
+            if (inputStream == null) {
+                throw new FileNotFoundException("Resource not found: " + resourcePath);
+            }
+            return readStreamFully(inputStream);
+        }
+    }
+
+    private static byte[] readStreamFully(InputStream inputStream) throws IOException {
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        byte[] data = new byte[1024];
+        int bytesRead;
+        while ((bytesRead = inputStream.read(data)) != -1) {
+            buffer.write(data, 0, bytesRead);
+        }
+        return buffer.toByteArray();
+    }
+
+    public String getListeningIP() {
+        return this.serverSocket.getInetAddress().getHostAddress();
+    }
+
+    private void sendResponse(Socket socket, byte[] content, String contentType) throws IOException {
+        String header = "HTTP/1.1 200 OK\r\n" +
+                "Content-Type: " + contentType + "\r\n" +
+                "Content-Length: " + content.length + "\r\n\r\n";
+        socket.getOutputStream().write(header.getBytes());
+        socket.getOutputStream().write(content);
+        socket.getOutputStream().flush();
+        socket.close();
+    }
+
+    private void handleHttpRequest(Socket socket, String path) throws IOException {
+        CachedResponse cachedResponse = webCache.get(path);
+
+        if (cachedResponse != null) {
+            sendResponse(socket, cachedResponse.getContent(), cachedResponse.getContentType());
+        }
+    }
+
+    private String getRequestedPath(String headerStr) {
+        String[] lines = headerStr.split("\r\n");
+        for (String line : lines) {
+            if (line.startsWith("GET")) {
+                return line.split(" ")[1]; // Extract the path from the GET request
+            }
+        }
+        return "";
+    }
+
     private void handleWebSocketRequest(Socket socket, String headerStr) throws IOException, NoSuchAlgorithmException {
         Map<String, String> headers = parseHeaders(headerStr);
         String key = headers.get("sec-websocket-key");
 
+        // Check if it's a valid WebSocket upgrade request
         if (!isWebSocketUpgrade(headers) || key == null) {
+            handleHttpRequest(socket, getRequestedPath(headerStr));
             socket.close();
             return;
         }
 
-        // Send WebSocket handshake response
+        // Send WebSocket handshake response if it's a valid WebSocket request
         String acceptKey = generateAcceptKey(key);
         String response = "HTTP/1.1 101 Switching Protocols\r\n" +
                 "Upgrade: websocket\r\n" +
@@ -90,6 +197,7 @@ public class DualProtocolServer {
 
         socket.getOutputStream().write(response.getBytes());
 
+        // Create and start the WebSocket client handler
         WebSocketClientHandler handler = new WebSocketClientHandler(socket, mcServer);
         wsClients.put(socket, handler);
         new Thread(handler).start();
@@ -152,4 +260,23 @@ public class DualProtocolServer {
         }
         wsClients.clear();
     }
+
+    private static class CachedResponse {
+        private final byte[] content;
+        private final String contentType;
+
+        public CachedResponse(byte[] content, String contentType) {
+            this.content = content;
+            this.contentType = contentType;
+        }
+
+        public byte[] getContent() {
+            return content;
+        }
+
+        public String getContentType() {
+            return contentType;
+        }
+    }
+
 }

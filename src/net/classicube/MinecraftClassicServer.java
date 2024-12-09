@@ -57,6 +57,10 @@ public class MinecraftClassicServer {
         this.dualServer = new DualProtocolServer(this, port);
     }
 
+    public Config getConfig() {
+        return config;
+    }
+
     public static void main(String[] args) throws IOException {
         MinecraftClassicServer server = new MinecraftClassicServer();
         server.start();
@@ -179,8 +183,12 @@ public class MinecraftClassicServer {
     }
 
     public boolean verifyPlayer(String username, String key) {
-        if (!verifyPlayers || !ENABLE_HEARTBEAT || heartbeatManager == null) {
+        if (!verifyPlayers) {
             return true;
+        }
+        if (heartbeatManager == null)
+        {
+            heartbeatManager = new HeartbeatManager(this);
         }
         String salt = heartbeatManager.getSalt();
         String expectedHash = HeartbeatManager.generateMppass(salt, username);
