@@ -19,7 +19,7 @@ public class DualProtocolServer {
 
     public String getPublicIP() {
         try {
-            URL url = new URL("https://classicube.net/api/myip");
+            URL url = new URL("https://www.classicube.net/api/myip/");
             HttpURLConnection connection = (HttpURLConnection) url.openConnection();
             connection.setRequestMethod("GET");
 
