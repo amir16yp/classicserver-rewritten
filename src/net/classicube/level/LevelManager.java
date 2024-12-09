@@ -43,6 +43,7 @@ public class LevelManager {
         Path levelPath = Paths.get(LEVELS_DIRECTORY, name + ".dat");
         if (Files.exists(levelPath)) {
             Level level = Level.loadFromFile(levelPath.toString());
+            level.setName(name);
             levels.put(name, level);
             System.out.println("Loaded level: " + name);
         } else {
@@ -57,7 +58,8 @@ public class LevelManager {
         }
 
         // Generate new level
-        Level level = new LevelGenerator(width, height, depth).generateFlatWorld();
+        Level level = new FlatLevelGenerator(width, height, depth).generateLevel();
+        level.setName(name);
         levels.put(name, level);
 
         // Save it immediately

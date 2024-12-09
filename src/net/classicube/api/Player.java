@@ -1,6 +1,8 @@
 package net.classicube.api;
 
 import net.classicube.ClientHandler;
+import net.classicube.level.Level;
+import net.classicube.level.LevelManager;
 import net.classicube.packets.MessagePacket;
 import net.classicube.packets.ServerPositionPacket;
 import net.classicube.packets.cpe.MakeSelectionPacket;
@@ -118,6 +120,12 @@ public class Player implements CommandSender {
 
     public void kick(String reason) {
         handle.disconnectPlayer(reason);
+    }
+
+    public Level getLevel()
+    {
+        LevelManager levelManager = API.getInstance().getServer().getLevelManager();;
+        return levelManager.getLevel(levelManager.getPlayerLevel(this));
     }
 
     // Get the underlying ClientHandler

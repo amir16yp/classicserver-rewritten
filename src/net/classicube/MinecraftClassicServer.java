@@ -4,6 +4,7 @@ import net.classicube.api.API;
 import net.classicube.api.CommandSender;
 import net.classicube.api.ConsoleCommandSender;
 import net.classicube.api.PluginLoader;
+import net.classicube.level.FlatLevelGenerator;
 import net.classicube.level.Level;
 import net.classicube.level.LevelGenerator;
 import net.classicube.level.LevelManager;
@@ -174,23 +175,6 @@ public class MinecraftClassicServer {
         }
     }
 
-    private Level loadOrGenerateLevel() {
-        Path levelPath = Paths.get(LEVEL_FILE);
-        if (Files.exists(levelPath)) {
-            try {
-                System.out.println("Loading existing level from " + LEVEL_FILE);
-                return Level.loadFromFile(LEVEL_FILE);
-            } catch (IOException e) {
-                System.out.println("Failed to load level: " + e.getMessage());
-                System.out.println("Generating new level instead...");
-            }
-        }
-        return new LevelGenerator(
-                (short) config.getLevelWidth(),
-                (short) config.getLevelHeight(),
-                (short) config.getLevelLength()
-        ).generateFlatWorld();
-    }
 
     private void setupAutoSave() {
         autoSaveTimer.scheduleAtFixedRate(new TimerTask() {

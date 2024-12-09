@@ -2,8 +2,10 @@ package net.classicube.api;
 
 import net.classicube.ClientHandler;
 import net.classicube.MinecraftClassicServer;
+import net.classicube.api.enums.BlockType;
 import net.classicube.api.enums.ChatColors;
 import net.classicube.api.enums.EnvColorType;
+import net.classicube.level.Level;
 import net.classicube.level.LevelManager;
 import net.classicube.packets.MessagePacket;
 import net.classicube.packets.cpe.EnvColorsPacket;
@@ -21,7 +23,7 @@ public class API {
     private static final int MAX_MESSAGE_LENGTH = 64;
 
     private static API instance;
-    private static boolean initialized = false;
+    public static boolean initialized = false;
     private final MinecraftClassicServer server;
     private final CommandRegistry commandRegistry;
     private final PluginLoader pluginLoader;
@@ -162,6 +164,17 @@ public class API {
                 BlockSelection selection = new BlockSelection(players.get(0).getLocation(), players.get(1).getLocation(), new Color(255, 0, 0, 128), "test");
                 MakeSelectionPacket makeSelectionPacket = new MakeSelectionPacket(selection);
                 ClientHandler.broadcastPacket(makeSelectionPacket);
+            }
+
+            return "test complete";
+        }));
+
+        commandRegistry.registerCommand("sphere", true, ((sender, args) -> {
+            if (sender instanceof Player) {
+                Level level = ((Player) sender).getLevel();
+                Location loc = ((Player) sender).getLocation();
+                level.createHollowSphere(loc.getX(), loc.getY(), loc.getZ(), 20, BlockType.GLASS);
+                return level.toString();
             }
 
             return "test complete";
