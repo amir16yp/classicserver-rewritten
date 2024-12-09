@@ -122,9 +122,8 @@ public class Player implements CommandSender {
         handle.disconnectPlayer(reason);
     }
 
-    public Level getLevel()
-    {
-        LevelManager levelManager = API.getInstance().getServer().getLevelManager();;
+    public Level getLevel() {
+        LevelManager levelManager = API.getInstance().getServer().getLevelManager();
         return levelManager.getLevel(levelManager.getPlayerLevel(this));
     }
 

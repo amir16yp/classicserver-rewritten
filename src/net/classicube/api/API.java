@@ -21,9 +21,8 @@ import java.util.Map;
 public class API {
 
     private static final int MAX_MESSAGE_LENGTH = 64;
-
-    private static API instance;
     public static boolean initialized = false;
+    private static API instance;
     private final MinecraftClassicServer server;
     private final CommandRegistry commandRegistry;
     private final PluginLoader pluginLoader;

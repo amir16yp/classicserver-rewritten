@@ -33,12 +33,12 @@ public class BackroomsGenerator extends LevelGenerator {
             currentFloorHeight = MIN_FLOOR_HEIGHT + random.nextInt(MAX_FLOOR_HEIGHT - MIN_FLOOR_HEIGHT + 1);
 
             // Create floor base
-            level.fillCuboid(0, currentY, 0, width-1, currentY, depth-1,
+            level.fillCuboid(0, currentY, 0, width - 1, currentY, depth - 1,
                     floor == 0 ? BlockType.BEDROCK : BlockType.YELLOW_CLOTH);
 
             // Create ceiling
             level.fillCuboid(0, currentY + currentFloorHeight - 1, 0,
-                    width-1, currentY + currentFloorHeight - 1, depth-1,
+                    width - 1, currentY + currentFloorHeight - 1, depth - 1,
                     BlockType.WHITE_CLOTH);
 
             // Generate random rooms and corridors
@@ -208,8 +208,8 @@ public class BackroomsGenerator extends LevelGenerator {
         // Add glass barrier around void
         for (int y = 0; y < height; y++) {
             for (int angle = 0; angle < 360; angle++) {
-                int x = centerX + (int)(VOID_RADIUS * Math.cos(Math.toRadians(angle)));
-                int z = centerZ + (int)(VOID_RADIUS * Math.sin(Math.toRadians(angle)));
+                int x = centerX + (int) (VOID_RADIUS * Math.cos(Math.toRadians(angle)));
+                int z = centerZ + (int) (VOID_RADIUS * Math.sin(Math.toRadians(angle)));
                 if (level.isInBounds(x, y, z)) {
                     level.setBlock(x, y, z, BlockType.GLASS);
                 }
@@ -257,13 +257,13 @@ public class BackroomsGenerator extends LevelGenerator {
     }
 
     private void addLights(Level level, int ceilingY) {
-        for(int x = 4; x < width-4; x += 6 + random.nextInt(4)) {
-            for(int z = 4; z < depth-4; z += 6 + random.nextInt(4)) {
-                if (!isInVoid(x, z, width/2, depth/2)) {
+        for (int x = 4; x < width - 4; x += 6 + random.nextInt(4)) {
+            for (int z = 4; z < depth - 4; z += 6 + random.nextInt(4)) {
+                if (!isInVoid(x, z, width / 2, depth / 2)) {
                     // Random light sizes
                     int lightSize = 1 + random.nextInt(2);
-                    for(int lx = 0; lx < lightSize; lx++) {
-                        for(int lz = 0; lz < lightSize; lz++) {
+                    for (int lx = 0; lx < lightSize; lx++) {
+                        for (int lz = 0; lz < lightSize; lz++) {
                             if (level.isInBounds(x + lx, ceilingY, z + lz)) {
                                 level.setBlock(x + lx, ceilingY, z + lz, BlockType.GLASS);
                             }

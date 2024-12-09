@@ -1,8 +1,8 @@
 package net.classicube.level;
 
+import net.classicube.ClientHandler;
 import net.classicube.api.API;
 import net.classicube.api.enums.BlockType;
-import net.classicube.ClientHandler;
 import net.classicube.packets.SetBlockServerPacket;
 
 import java.io.*;
@@ -23,16 +23,6 @@ public class Level {
         this.blocks = new byte[width][height][depth];
     }
 
-    public void setName(String name) {
-        this.name = name;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    // ===== File Operations =====
-
     public static Level loadFromFile(String filename) throws IOException {
         try (DataInputStream dis = new DataInputStream(
                 new GZIPInputStream(
@@ -49,6 +39,16 @@ public class Level {
             level.setBlockData(data);
             return level;
         }
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    // ===== File Operations =====
+
+    public void setName(String name) {
+        this.name = name;
     }
 
     public void saveToFile(String filename) throws IOException {
@@ -238,7 +238,7 @@ public class Level {
     }
 
     public int[] getCenter() {
-        return new int[] { width / 2, height / 2, depth / 2 };
+        return new int[]{width / 2, height / 2, depth / 2};
     }
 
     public short getWidth() {
