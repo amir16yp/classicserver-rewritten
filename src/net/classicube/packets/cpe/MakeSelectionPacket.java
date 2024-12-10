@@ -7,7 +7,6 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 
 public class MakeSelectionPacket extends CPEPacket {
-    private static byte selectionId;
     private final BlockSelection blockSelection;
 
     public MakeSelectionPacket(BlockSelection blockSelection) {
@@ -18,8 +17,7 @@ public class MakeSelectionPacket extends CPEPacket {
     @Override
     public void write(DataOutputStream out) throws IOException {
         super.write(out);
-        blockSelection.setSelectionId(selectionId);
-        out.writeByte(selectionId);
+        out.writeByte(blockSelection.getSelectionId());
         CPEPacket.writeString(out, blockSelection.getLabel());
         out.writeShort(blockSelection.getPoint1().getX());
         out.writeShort(blockSelection.getPoint1().getY());
@@ -31,10 +29,6 @@ public class MakeSelectionPacket extends CPEPacket {
         out.writeShort(blockSelection.getOutlineColor().getGreen());
         out.writeShort(blockSelection.getOutlineColor().getBlue());
         out.writeShort(blockSelection.getOutlineColor().getAlpha());
-        selectionId++;
-        if (selectionId > 127) {
-            selectionId = 0;
-        }
     }
 
 }

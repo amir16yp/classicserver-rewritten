@@ -3,6 +3,6 @@ package net.classicube.api;
 import java.io.IOException;
 
 @FunctionalInterface
-interface Command {
+public interface Command {
     String execute(CommandSender sender, String[] args) throws IOException;
 }
