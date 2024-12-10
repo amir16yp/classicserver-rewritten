@@ -35,8 +35,7 @@ public class API {
         this.commandRegistry = new CommandRegistry();
         this.pluginLoader = new PluginLoader();
         registerDefaultCommands();
-        this.pluginLoader.loadPlugins("plugins");
-        this.pluginLoader.enablePlugins();
+
     }
 
 
@@ -113,6 +112,8 @@ public class API {
         synchronized (API.class) {
             if (instance == null) {
                 instance = new API(server);
+                instance.pluginLoader.loadPlugins("plugins");
+                instance.pluginLoader.enablePlugins();
                 initialized = true;
             }
         }
