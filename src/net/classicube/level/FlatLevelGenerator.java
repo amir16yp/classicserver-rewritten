@@ -20,8 +20,8 @@ public class FlatLevelGenerator extends LevelGenerator {
         level.fillCuboid(0, 1, 0, width - 1, 1, depth - 1, BlockType.GRASS_BLOCK);    // Second layer: Grass
         int[] center = level.getCenter();
         level.createHollowSphere(center[0], center[1], center[2], 16, BlockType.GLASS);
-        level.createHollowSphere(center[0], center[1], center[2], 15, BlockType.STATIONARY_LAVA);
-        level.createHollowSphere(center[0], center[1], center[2], 14, BlockType.GLASS);
+        //level.createHollowSphere(center[0], center[1], center[2], 15, BlockType.STATIONARY_LAVA);
+        //level.createHollowSphere(center[0], center[1], center[2], 14, BlockType.GLASS);
         return level;
     }
 
