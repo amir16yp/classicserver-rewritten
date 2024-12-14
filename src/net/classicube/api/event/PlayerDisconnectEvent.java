@@ -11,4 +11,12 @@ public class PlayerDisconnectEvent extends Event
         this.player = player;
         this.reason = reason;
     }
+
+    public Player getPlayer() {
+        return player;
+    }
+
+    public String getReason() {
+        return reason;
+    }
 }
