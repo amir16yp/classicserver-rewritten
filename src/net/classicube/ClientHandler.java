@@ -4,10 +4,7 @@ import net.classicube.api.API;
 import net.classicube.api.Location;
 import net.classicube.api.Player;
 import net.classicube.api.enums.BlockType;
-import net.classicube.api.event.EventRegistry;
-import net.classicube.api.event.PlayerBreakBlockEvent;
-import net.classicube.api.event.PlayerJoinEvent;
-import net.classicube.api.event.PlayerPlaceBlockEvent;
+import net.classicube.api.event.*;
 import net.classicube.level.Level;
 import net.classicube.packets.*;
 import net.classicube.packets.cpe.CPEPacket;
@@ -549,6 +546,7 @@ public class ClientHandler implements Runnable {
                 sendPacket(disconnectPacket);
                 broadcastPacket(new ExtRemovePlayerNamePacket(this.playerId));
                 socket.close();
+                EventRegistry.callEvent(new PlayerDisconnectEvent(Player.getInstance(this), reason));
             }
         } catch (IOException e) {
             System.out.println("Error while disconnecting player: " + e.getMessage());
