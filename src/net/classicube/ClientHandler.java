@@ -11,22 +11,34 @@ import net.classicube.packets.cpe.CPEPacket;
 import net.classicube.packets.cpe.ExtAddPlayerNamePacket;
 import net.classicube.packets.cpe.ExtRemovePlayerNamePacket;
 
+import javax.swing.text.AbstractDocument;
 import java.io.*;
 import java.net.Socket;
 import java.net.SocketException;
-import java.util.ArrayList;
-import java.util.Collection;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.zip.GZIPOutputStream;
 
-public class ClientHandler implements Runnable {
+public class ClientHandler implements Runnable, AutoCloseable {
+    private static final int PACKET_BUFFER_SIZE = 8192;
+    private static final int MAX_MESSAGE_LENGTH = 64;
     public static final ConcurrentHashMap<Byte, ClientHandler> clients = new ConcurrentHashMap<>();
-    private static byte nextPlayerId = 0;
+    private static final PlayerIDManager idManager = new PlayerIDManager();
+
+    private enum ClientState {
+        CONNECTING, IDENTIFYING, ACTIVE, DISCONNECTING, DISCONNECTED
+    }
+
     protected final Socket socket;
-    protected final Object writeLock = new Object();
-    protected final Object readLock = new Object();
+    private final ReentrantLock writeLock = new ReentrantLock();
+    private final ReentrantLock readLock = new ReentrantLock();
     private final MinecraftClassicServer server;
     private final byte playerId;
+    private final Map<PacketType, PacketHandler> packetHandlers;
+    private final AtomicReference<ClientState> state = new AtomicReference<>(ClientState.CONNECTING);
+
     protected DataInputStream in;
     protected DataOutputStream out;
     protected boolean supportsCPE;
@@ -37,9 +49,29 @@ public class ClientHandler implements Runnable {
     public ClientHandler(Socket socket, MinecraftClassicServer server) throws IOException {
         this.socket = socket;
         this.server = server;
-        this.playerId = getNextPlayerId();
-        setupStreams();
-        System.out.println("New client connected. Assigned player ID: " + playerId);
+        try {
+            this.playerId = idManager.getNextAvailableId();
+            socket.setTcpNoDelay(true);
+            setupStreams();
+
+            this.packetHandlers = initializePacketHandlers();
+            System.out.println("New client connected. Assigned player ID: " + playerId);
+        } catch (PlayerIDManager.NoAvailableIDException e) {
+            throw new IOException("Server is full - maximum players reached");
+        }
+    }
+
+    protected void setupStreams() throws IOException {
+        this.in = new DataInputStream(socket.getInputStream());
+        this.out = new DataOutputStream(socket.getOutputStream());
+    }
+
+    private Map<PacketType, PacketHandler> initializePacketHandlers() {
+        Map<PacketType, PacketHandler> handlers = new EnumMap<>(PacketType.class);
+        handlers.put(PacketType.POSITION_ORIENTATION, this::handleClientPosition);
+        handlers.put(PacketType.SET_BLOCK, this::handleSetBlock);
+        handlers.put(PacketType.MESSAGE, this::handleMessage);
+        return Collections.unmodifiableMap(handlers);
     }
 
     public static void broadcastPacket(Packet packet) {
@@ -49,7 +81,6 @@ public class ClientHandler implements Runnable {
                     client.sendPacket(packet);
                 } catch (Exception e) {
                     System.out.println("ERROR SENDING PACKET TO " + client + " " + e.getMessage());
-                    e.printStackTrace();
                 }
             }
         }
@@ -62,65 +93,53 @@ public class ClientHandler implements Runnable {
                     client.sendPacket(packet);
                 } catch (Exception e) {
                     System.out.println("ERROR SENDING PACKET TO " + client + " " + e.getMessage());
-                    e.printStackTrace();
                 }
             }
         }
     }
 
     public static Collection<ClientHandler> getClientsInLevel(String levelName) {
-        ArrayList<ClientHandler> clientsInLevel = new ArrayList<>();
-        for (ClientHandler client : getClients()) {
-            String clientLevel = client.server.getLevelManager().getPlayerLevel(Player.getInstance(client));
-            if (levelName.equals(clientLevel)) {
-                clientsInLevel.add(client);
-            }
-        }
-        return clientsInLevel;
+        return getClients().stream()
+                .filter(client -> levelName.equals(client.server.getLevelManager().getPlayerLevel(Player.getInstance(client))))
+                .collect(java.util.stream.Collectors.toList());
     }
 
     public static void broadcastPacketToLevel(Packet packet, String levelName) {
-        for (ClientHandler client : getClientsInLevel(levelName)) {
-            if (client.socket.isConnected()) {
-                try {
-                    client.sendPacket(packet);
-                } catch (Exception e) {
-                    System.out.println("ERROR SENDING PACKET TO " + client + " " + e.getMessage());
-                    e.printStackTrace();
-                }
-            }
-        }
+        getClientsInLevel(levelName).stream()
+                .filter(client -> client.socket.isConnected())
+                .forEach(client -> {
+                    try {
+                        client.sendPacket(packet);
+                    } catch (Exception e) {
+                        System.out.println("ERROR SENDING PACKET TO " + client + " " + e.getMessage());
+                    }
+                });
     }
 
     public static void broadcastPacketToLevelExcept(Packet packet, String levelName, ClientHandler except) {
-        for (ClientHandler client : getClientsInLevel(levelName)) {
-            if (client.socket.isConnected() && client != except) {
-                try {
-                    client.sendPacket(packet);
-                } catch (Exception e) {
-                    System.out.println("ERROR SENDING PACKET TO " + client + " " + e.getMessage());
-                    e.printStackTrace();
-                }
-            }
-        }
+        getClientsInLevel(levelName).stream()
+                .filter(client -> client.socket.isConnected() && client != except)
+                .forEach(client -> {
+                    try {
+                        client.sendPacket(packet);
+                    } catch (Exception e) {
+                        System.out.println("ERROR SENDING PACKET TO " + client + " " + e.getMessage());
+                    }
+                });
     }
 
     public static ClientHandler getByName(String username) {
-        for (ClientHandler clientHandler : ClientHandler.getClients()) {
-            if (username.equals(clientHandler.getUsername())) {
-                return clientHandler;
-            }
-        }
-        return null;
+        return getClients().stream()
+                .filter(client -> username.equals(client.getUsername()))
+                .findFirst()
+                .orElse(null);
     }
 
     public static ClientHandler getByNameCaseInsensitive(String username) {
-        for (ClientHandler clientHandler : ClientHandler.getClients()) {
-            if (username.equalsIgnoreCase(clientHandler.getUsername())) {
-                return clientHandler;
-            }
-        }
-        return null;
+        return getClients().stream()
+                .filter(client -> username.equalsIgnoreCase(client.getUsername()))
+                .findFirst()
+                .orElse(null);
     }
 
     public static int getClientCount() {
@@ -131,21 +150,10 @@ public class ClientHandler implements Runnable {
         return clients.values();
     }
 
-    // Utility methods
-    private static synchronized byte getNextPlayerId() {
-        byte id = nextPlayerId++;
-        if (nextPlayerId < 0) nextPlayerId = 0;
-        return id;
-    }
-
-    protected void setupStreams() throws IOException {
-        in = new DataInputStream(socket.getInputStream());
-        out = new DataOutputStream(socket.getOutputStream());
-    }
-
     @Override
     public String toString() {
-        return "<ID: " + playerId + " NAME: " + username + " IP: " + this.socket.getInetAddress().getHostAddress() + ">";
+        return String.format("<ID: %d NAME: %s IP: %s>",
+                playerId, username, this.socket.getInetAddress().getHostAddress());
     }
 
     public Socket getSocket() {
@@ -153,25 +161,38 @@ public class ClientHandler implements Runnable {
     }
 
     public void sendPacket(Packet packet) throws IOException {
-        synchronized (writeLock) {
+        if (state.get() == ClientState.DISCONNECTED) {
+            return;
+        }
+
+        writeLock.lock();
+        try {
             if (packet instanceof CPEPacket && !this.supportsCPE) {
                 return;
             }
             packet.write(out);
             out.flush();
-            //System.out.println("SENT " + packet.getType().name() + " TO " + username);
+        } finally {
+            writeLock.unlock();
         }
     }
 
+
     public void readPacket(Packet packet) throws IOException {
-        synchronized (readLock) {
+        readLock.lock();
+        try {
             packet.read(in);
+        } finally {
+            readLock.unlock();
         }
     }
 
     public byte readPacketId() throws IOException {
-        synchronized (readLock) {
+        readLock.lock();
+        try {
             return in.readByte();
+        } finally {
+            readLock.unlock();
         }
     }
 
@@ -179,6 +200,7 @@ public class ClientHandler implements Runnable {
     public void run() {
         try {
             if (handlePlayerIdentification()) {
+                state.set(ClientState.ACTIVE);
                 sendLevelData();
                 spawnPlayer();
                 broadcastSpawn();
@@ -188,15 +210,40 @@ public class ClientHandler implements Runnable {
             }
         } catch (IOException e) {
             System.out.println("Error handling client: " + e.getMessage());
-            e.printStackTrace();
         } finally {
             disconnectPlayer("Connection closed");
         }
     }
 
+    private void gameLoop() {
+        try {
+            while (state.get() == ClientState.ACTIVE && socket.isConnected()) {
+                byte packetId = readPacketId();
+                PacketType packetType = PacketType.fromId(packetId);
+
+                PacketHandler handler = packetHandlers.get(packetType);
+                if (handler != null) {
+                    handler.handle();
+                } else {
+                    System.out.println("Unhandled packet type from " + username + ": " + packetType);
+                }
+            }
+        } catch (EOFException e) {
+            handleDisconnect("Client disconnected normally");
+        } catch (IOException e) {
+            handleDisconnect("Connection error: " + e.getMessage());
+        } catch (Exception e) {
+            handleDisconnect("Unexpected error: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    private void handleDisconnect(String reason) {
+        disconnectPlayer(reason);
+    }
+
     private boolean handlePlayerIdentification() throws IOException {
         byte firstPacketId = readPacketId();
-        System.out.println(firstPacketId);
         if (firstPacketId != PacketType.PLAYER_IDENTIFICATION.getId()) {
             disconnectPlayer("Invalid initial packet");
             return false;
@@ -213,44 +260,56 @@ public class ClientHandler implements Runnable {
 
         username = packet.getUsername();
 
-        // Check for existing player with same name
         if (getByNameCaseInsensitive(username) != null) {
             disconnectPlayer("A player with that name is already online!");
             return false;
         }
 
-        if (this.server.isVerifyPlayers()) {
-            if (!this.server.verifyPlayer(username, packet.getVerificationKey())) {
-                if (this instanceof WebSocketClientHandler) {
-                    // Allow web clients with usernames starting with "[Guest]" followed by a number as guests
-                    if (server.getConfig().isEnableWebGuests() && username.startsWith("[Guest]") && username.length() > 7 && username.substring(7).matches("\\d+")) {                        System.out.println("Web client with guest username allowed to log in: " + username);
-                    } else {
-                        disconnectPlayer("Name verification failed!");
-                        return false;
-                    }
-                } else {
-                    // Non-web clients always require verification
+        if (!validatePlayer(packet)) {
+            return false;
+        }
+
+        sendServerIdentification();
+        sendPlayerNamePacket();
+        return true;
+    }
+
+    private boolean validatePlayer(PlayerIdentificationPacket packet) {
+        if (server.isVerifyPlayers() && !server.verifyPlayer(username, packet.getVerificationKey())) {
+            if (this instanceof WebSocketClientHandler) {
+                if (!isValidWebGuest()) {
                     disconnectPlayer("Name verification failed!");
                     return false;
                 }
+            } else {
+                disconnectPlayer("Name verification failed!");
+                return false;
             }
         }
 
-
-        if (this.server.getBanList().contains(username)) {
+        if (server.getBanList().contains(username)) {
             disconnectPlayer("You are banned!");
             return false;
         }
-        sendServerIdentification();
+
+        return true;
+    }
+
+    private boolean isValidWebGuest() {
+        return server.getConfig().isEnableWebGuests() &&
+                username.startsWith("[Guest]") &&
+                username.length() > 7 &&
+                username.substring(7).matches("\\d+");
+    }
+
+    private void sendPlayerNamePacket() throws IOException {
         ExtAddPlayerNamePacket playerNamePacket = new ExtAddPlayerNamePacket();
         playerNamePacket.setGroupName("players");
         playerNamePacket.setNameID(this.playerId);
         playerNamePacket.setAutocompletePlayerName(username);
         playerNamePacket.setListPlayerName(username);
         playerNamePacket.setGroupRank((byte) 0);
-
         broadcastPacket(playerNamePacket);
-        return true;
     }
 
     private void sendServerIdentification() throws IOException {
@@ -266,29 +325,17 @@ public class ClientHandler implements Runnable {
         sendPacket(response);
     }
 
+    private Level getCurrentLevel()
+    {
+        return API.getInstance().getServer().getLevelManager().getLevel("main");
+    }
+
     private void sendLevelData() throws IOException {
         Level level = getCurrentLevel();
         sendLevelInitialize();
         sendCompressedLevelData(level);
         sendLevelFinalize(level);
     }
-
-
-    private Level getCurrentLevel() {
-        // First check if player has a specific level assigned
-        Player player = Player.getInstance(this);
-        String levelName = server.getLevelManager().getPlayerLevel(player);
-
-        // If no specific level, use the "main" level
-        if (levelName == null) {
-            levelName = "main";
-            // Set the player's initial level
-            server.getLevelManager().setPlayerLevel(player, levelName);
-        }
-
-        return server.getLevelManager().getLevel(levelName);
-    }
-
 
     private void sendLevelInitialize() throws IOException {
         sendPacket(new LevelInitializePacket());
@@ -353,8 +400,6 @@ public class ClientHandler implements Runnable {
         }
     }
 
-
-    // Player spawning methods
     private void spawnPlayer() throws IOException {
         Level level = getCurrentLevel();
         x = (short) (level.getWidth() / 2 * 32);
@@ -395,7 +440,6 @@ public class ClientHandler implements Runnable {
         }
     }
 
-
     private void sendSpawnPacket(ClientHandler receiver, ClientHandler playerToSpawn) throws IOException {
         SpawnPlayerPacket spawnPacket = new SpawnPlayerPacket();
         spawnPacket.setPlayerId(playerToSpawn.playerId);
@@ -410,72 +454,21 @@ public class ClientHandler implements Runnable {
         receiver.sendPacket(spawnPacket);
     }
 
-    private void gameLoop() {
-        System.out.println("Entering game loop for player: " + username);
-        try {
-            while (socket.isConnected()) {
-                byte packetId = readPacketId();
-                PacketType packetType = PacketType.fromId(packetId);
-
-                switch (packetType) {
-                    case POSITION_ORIENTATION:
-                        handleClientPosition();
-                        break;
-                    case SET_BLOCK:
-                        handleSetBlock();
-                        break;
-                    case MESSAGE:
-                        handleMessage();
-                        break;
-                    default:
-                        System.out.println("Unhandled packet type from " + username + ": " + packetType);
-                }
-            }
-        } catch (EOFException e) {
-            System.out.println("Client disconnected: " + username);
-        } catch (IOException e) {
-            System.out.println("IO error in game loop for " + username + ": " + e.getMessage());
-        } catch (Exception e) {
-            System.out.println("Unexpected error in game loop for " + username + ": " + e.getMessage());
-            e.printStackTrace();
-        } finally {
-            System.out.println("Exiting game loop for player: " + username);
-        }
-    }
-
     private void handleClientPosition() throws IOException {
         ClientPositionPacket packet = new ClientPositionPacket();
         readPacket(packet);
 
-        if (isValidPosition(packet.getX(), packet.getY(), packet.getZ())) {
-            updatePlayerPosition(packet);
-            broadcastPositionUpdate();
-        } else {
+        short newX = packet.getX();
+        short newY = packet.getY();
+        short newZ = packet.getZ();
+
+        if (!isValidPosition(newX, newY, newZ)) {
             sendPositionCorrection();
+            return;
         }
+
+        updateAndBroadcastPosition(packet);
     }
-
-    private void updatePlayerPosition(ClientPositionPacket packet) {
-        x = packet.getX();
-        y = packet.getY();
-        z = packet.getZ();
-        yaw = packet.getYaw();
-        pitch = packet.getPitch();
-    }
-
-    private void broadcastPositionUpdate() throws IOException {
-        String levelName = server.getLevelManager().getPlayerLevel(Player.getInstance(this));
-        ServerPositionPacket updatePacket = new ServerPositionPacket();
-        updatePacket.setPlayerId(playerId);
-        updatePacket.setX(x);
-        updatePacket.setY(y);
-        updatePacket.setZ(z);
-        updatePacket.setYaw(yaw);
-        updatePacket.setPitch(pitch);
-
-        broadcastPacketToLevelExcept(updatePacket, levelName, this);
-    }
-
 
     private void sendPositionCorrection() throws IOException {
         ServerPositionPacket correctPacket = new ServerPositionPacket();
@@ -486,84 +479,164 @@ public class ClientHandler implements Runnable {
         correctPacket.setYaw(yaw);
         correctPacket.setPitch(pitch);
         sendPacket(correctPacket);
-        //System.out.println("Sent correction packet to " + username);
+    }
+
+    private void updateAndBroadcastPosition(ClientPositionPacket packet) throws IOException {
+        synchronized (this) {
+            x = packet.getX();
+            y = packet.getY();
+            z = packet.getZ();
+            yaw = packet.getYaw();
+            pitch = packet.getPitch();
+        }
+
+        String levelName = server.getLevelManager().getPlayerLevel(Player.getInstance(this));
+        ServerPositionPacket updatePacket = createPositionUpdatePacket();
+        broadcastPacketToLevelExcept(updatePacket, levelName, this);
+    }
+
+    private ServerPositionPacket createPositionUpdatePacket() {
+        ServerPositionPacket packet = new ServerPositionPacket();
+        packet.setPlayerId(playerId);
+        packet.setX(x);
+        packet.setY(y);
+        packet.setZ(z);
+        packet.setYaw(yaw);
+        packet.setPitch(pitch);
+        return packet;
     }
 
     private void handleMessage() throws IOException {
         MessagePacket packet = new MessagePacket();
         readPacket(packet);
 
-        if (packet.getMessage().startsWith("/")) {
-            API.getInstance().getCommandRegistry().executeCommand(Player.getInstance(this), packet.getMessage().substring(1));
+        String message = packet.getMessage();
+        if (message == null || message.length() > MAX_MESSAGE_LENGTH) {
+            return;
+        }
+
+        if (message.startsWith("/")) {
+            API.getInstance().getCommandRegistry().executeCommand(
+                    Player.getInstance(this), message.substring(1));
             return;
         }
 
         String levelName = server.getLevelManager().getPlayerLevel(Player.getInstance(this));
         MessagePacket broadcastPacket = new MessagePacket();
         broadcastPacket.setPlayerId(playerId);
-        broadcastPacket.setMessage(username + ":" + packet.getMessage());
-
-        // Only broadcast chat messages to players in the same level
+        broadcastPacket.setMessage(username + ":" + message);
         broadcastPacketToLevel(broadcastPacket, levelName);
     }
 
-    private boolean isValidPosition(short newX, short newY, short newZ) {
-        Level level = getCurrentLevel();
-        int blockX = newX / 32;
-        int blockY = newY / 32;
-        int blockZ = newZ / 32;
+    private void handleSetBlock() {
+        try {
+            SetBlockClientPacket packet = new SetBlockClientPacket();
+            readPacket(packet);
 
-        return blockX >= 0 && blockX < level.getWidth() &&
-                blockY >= 0 && blockY < level.getHeight() &&
-                blockZ >= 0 && blockZ < level.getDepth();
+            if (!isValidBlockChange(packet)) {
+                sendCurrentBlockState(packet);
+                return;
+            }
+
+            Player player = Player.getInstance(this);
+            Level currentLevel = getCurrentLevel();
+            Location blockLocation = Location.fromBlockCoordinates(
+                    packet.getX(), packet.getY(), packet.getZ());
+            BlockType currentBlockType = BlockType.getById(
+                    currentLevel.getBlock(packet.getX(), packet.getY(), packet.getZ()));
+
+            if (packet.getMode().isDestroy()) {
+                handleBlockDestruction(player, blockLocation, currentBlockType, packet);
+            } else if (packet.getMode().isPlace()) {
+                handleBlockPlacement(player, blockLocation, packet);
+            }
+        } catch (Exception e) {
+            System.out.println("Error handling SET_BLOCK from " + username + ": " + e.getMessage());
+            e.printStackTrace();
+        }
     }
 
+    private void handleBlockDestruction(Player player, Location location,
+                                        BlockType currentType, SetBlockClientPacket packet) throws IOException {
+        PlayerBreakBlockEvent breakEvent = new PlayerBreakBlockEvent(player, location, currentType);
+        EventRegistry.callEvent(breakEvent);
 
-    private boolean isValidBlockChange(SetBlockClientPacket packet) {
-        Level level = getCurrentLevel();
-        if (packet.getX() < 0 || packet.getX() >= level.getWidth() ||
-                packet.getY() < 0 || packet.getY() >= level.getHeight() ||
-                packet.getZ() < 0 || packet.getZ() >= level.getDepth()) {
-            System.out.println("Invalid block coordinates: " + packet.getX() + ", " + packet.getY() + ", " + packet.getZ());
-            return false;
+        if (!breakEvent.isCancelled()) {
+            getCurrentLevel().setBlock(packet.getX(), packet.getY(), packet.getZ(), BlockType.AIR);
+            broadcastBlockChange(packet.getX(), packet.getY(), packet.getZ(), BlockType.AIR);
         }
-
-        if (packet.getMode() == null) {
-            return false;
-        }
-
-        BlockType blockType = packet.getBlockType();
-        return blockType != null;
     }
 
-    // Disconnection and cleanup
+    private void handleBlockPlacement(Player player, Location location,
+                                      SetBlockClientPacket packet) throws IOException {
+        PlayerPlaceBlockEvent placeEvent = new PlayerPlaceBlockEvent(player, location, packet.getBlockType());
+        EventRegistry.callEvent(placeEvent);
+
+        if (!placeEvent.isCancelled()) {
+            getCurrentLevel().setBlock(packet.getX(), packet.getY(), packet.getZ(), placeEvent.getBlockType());
+            broadcastBlockChange(packet.getX(), packet.getY(), packet.getZ(), placeEvent.getBlockType());
+        }
+    }
+
+    private void sendCurrentBlockState(SetBlockClientPacket packet) {
+        try {
+            BlockType currentBlockType = BlockType.getById(
+                    getCurrentLevel().getBlock(packet.getX(), packet.getY(), packet.getZ()));
+            sendBlockCorrection(packet.getX(), packet.getY(), packet.getZ(), currentBlockType);
+        } catch (IOException e) {
+            System.out.println("Error sending block correction to " + username + ": " + e.getMessage());
+        }
+    }
+
+    @Override
+    public void close() {
+        disconnectPlayer("Server shutting down");
+    }
+
     public void disconnectPlayer(String reason) {
-        System.out.println("Disconnecting player: " + (username != null ? username : "unknown") + " (Reason: " + reason + ")");
+        if (!state.compareAndSet(ClientState.ACTIVE, ClientState.DISCONNECTING)) {
+            return;
+        }
+
+        System.out.println("Disconnecting player: " + (username != null ? username : "unknown") +
+                " (Reason: " + reason + ")");
+
+        try {
+            sendDisconnectPacket(reason);
+        } finally {
+            cleanup();
+        }
+    }
+
+    private void sendDisconnectPacket(String reason) {
         try {
             if (socket != null && !socket.isClosed()) {
                 DisconnectPlayerPacket disconnectPacket = new DisconnectPlayerPacket();
                 disconnectPacket.setReason(reason);
                 sendPacket(disconnectPacket);
                 broadcastPacket(new ExtRemovePlayerNamePacket(this.playerId));
-                socket.close();
-                EventRegistry.callEvent(new PlayerDisconnectEvent(Player.getInstance(this), reason));
             }
         } catch (IOException e) {
-            System.out.println("Error while disconnecting player: " + e.getMessage());
-        } finally {
-            if (playerId != -1) {
-                clients.remove(playerId);
-                try {
-                    broadcastDespawn();
-                } catch (IOException e) {
-                    System.out.println("Error while broadcasting despawn: " + e.getMessage());
-                }
-                Player.removeFromCache(this);
-            }
+            System.out.println("Error sending disconnect packet: " + e.getMessage());
         }
     }
 
-    protected void broadcastDespawn() throws IOException {
+    private void cleanup() {
+        try {
+            if (playerId != -1) {
+                clients.remove(playerId);
+                idManager.releaseId(playerId);
+                broadcastDespawn();
+                Player.removeFromCache(this);
+            }
+
+            closeResources();
+        } finally {
+            state.set(ClientState.DISCONNECTED);
+        }
+    }
+
+    protected void broadcastDespawn() {
         String levelName = server.getLevelManager().getPlayerLevel(Player.getInstance(this));
         DespawnPlayerPacket despawnPacket = new DespawnPlayerPacket();
         despawnPacket.setPlayerId(playerId);
@@ -571,44 +644,13 @@ public class ClientHandler implements Runnable {
         broadcastPacketToLevelExcept(despawnPacket, levelName, this);
     }
 
-    private void handleSetBlock() {
+    private void closeResources() {
         try {
-            SetBlockClientPacket packet = new SetBlockClientPacket();
-            readPacket(packet);
-            Player player = Player.getInstance(this);
-            Level currentLevel = getCurrentLevel();
-            Location blockLocation = Location.fromBlockCoordinates(packet.getX(), packet.getY(), packet.getZ());
-
-            if (isValidBlockChange(packet)) {
-                BlockType currentBlockType = BlockType.getById(currentLevel.getBlock(packet.getX(), packet.getY(), packet.getZ()));
-
-                if (packet.getMode().isDestroy()) {  // Destroy block
-                    PlayerBreakBlockEvent breakEvent = new PlayerBreakBlockEvent(player, blockLocation, currentBlockType);
-                    EventRegistry.callEvent(breakEvent);
-
-                    if (!breakEvent.isCancelled()) {
-                        currentLevel.setBlock(packet.getX(), packet.getY(), packet.getZ(), BlockType.AIR);
-                        broadcastBlockChange(packet.getX(), packet.getY(), packet.getZ(), BlockType.AIR);
-                    }
-                } else if (packet.getMode().isPlace()) {  // Create block
-                    PlayerPlaceBlockEvent placeEvent = new PlayerPlaceBlockEvent(player, blockLocation, packet.getBlockType());
-                    EventRegistry.callEvent(placeEvent);
-
-                    if (!placeEvent.isCancelled()) {
-                        currentLevel.setBlock(packet.getX(), packet.getY(), packet.getZ(), placeEvent.getBlockType());
-                        broadcastBlockChange(packet.getX(), packet.getY(), packet.getZ(), placeEvent.getBlockType());
-                    }
-                }
-            } else {
-                BlockType currentBlockType = BlockType.getById(currentLevel.getBlock(packet.getX(), packet.getY(), packet.getZ()));
-                sendBlockCorrection(packet.getX(), packet.getY(), packet.getZ(), currentBlockType);
-            }
+            if (out != null) out.close();
+            if (in != null) in.close();
+            if (socket != null && !socket.isClosed()) socket.close();
         } catch (IOException e) {
-            System.out.println("Error handling SET_BLOCK from " + username + ": " + e.getMessage());
-            e.printStackTrace();
-        } catch (Exception e) {
-            System.out.println("Unexpected error handling SET_BLOCK from " + username + ": " + e.getMessage());
-            e.printStackTrace();
+            System.out.println("Error closing resources: " + e.getMessage());
         }
     }
 
@@ -623,22 +665,36 @@ public class ClientHandler implements Runnable {
         broadcastPacketToLevel(broadcastPacket, levelName);
     }
 
-
-    private void sendBlockCorrection(short x, short y, short z, BlockType blockType) {
-        try {
-            SetBlockServerPacket correctionPacket = new SetBlockServerPacket();
-            correctionPacket.setX(x);
-            correctionPacket.setY(y);
-            correctionPacket.setZ(z);
-            correctionPacket.setBlockType(blockType.getId());
-            sendPacket(correctionPacket);
-        } catch (IOException e) {
-            System.out.println("Error sending block correction to " + username + ": " + e.getMessage());
-            e.printStackTrace();
-        }
+    private void sendBlockCorrection(short x, short y, short z, BlockType blockType) throws IOException {
+        SetBlockServerPacket correctionPacket = new SetBlockServerPacket();
+        correctionPacket.setX(x);
+        correctionPacket.setY(y);
+        correctionPacket.setZ(z);
+        correctionPacket.setBlockType(blockType.getId());
+        sendPacket(correctionPacket);
     }
 
-    // Getters (if needed for external access)
+    private boolean isValidPosition(short newX, short newY, short newZ) {
+        Level level = getCurrentLevel();
+        int blockX = newX / 32;
+        int blockY = newY / 32;
+        int blockZ = newZ / 32;
+
+        return blockX >= 0 && blockX < level.getWidth() &&
+                blockY >= 0 && blockY < level.getHeight() &&
+                blockZ >= 0 && blockZ < level.getDepth();
+    }
+
+    private boolean isValidBlockChange(SetBlockClientPacket packet) {
+        Level level = getCurrentLevel();
+        return packet.getX() >= 0 && packet.getX() < level.getWidth() &&
+                packet.getY() >= 0 && packet.getY() < level.getHeight() &&
+                packet.getZ() >= 0 && packet.getZ() < level.getDepth() &&
+                packet.getMode() != null &&
+                packet.getBlockType() != null;
+    }
+
+    // Getters
     public String getUsername() {
         return username;
     }
@@ -665,5 +721,10 @@ public class ClientHandler implements Runnable {
 
     public byte getPitch() {
         return pitch;
+    }
+
+    @FunctionalInterface
+    private interface PacketHandler {
+        void handle() throws IOException;
     }
 }

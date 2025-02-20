@@ -18,7 +18,7 @@ public class Config {
     private boolean verifyPlayers = true;
     private boolean enableWebGuests = true;
     private String webGuestDomain = "";
-
+    private String tempAdminPass = "";
     private int levelWidth = 1024;
     private int levelHeight = 64;
     private int levelLength = 1024;
@@ -56,7 +56,7 @@ public class Config {
             levelWidth = Integer.parseInt(properties.getProperty("level-width", String.valueOf(levelWidth)));
             levelHeight = Integer.parseInt(properties.getProperty("level-height", String.valueOf(levelHeight)));
             levelLength = Integer.parseInt(properties.getProperty("level-length", String.valueOf(levelLength)));
-
+            tempAdminPass = String.valueOf(properties.getProperty("tempadminpass", String.valueOf(tempAdminPass)));
         } catch (IOException e) {
             System.out.println("Failed to load config file: " + e.getMessage());
             System.out.println("Using default values");
@@ -75,6 +75,7 @@ public class Config {
         properties.setProperty("level-width", String.valueOf(levelWidth));
         properties.setProperty("level-height", String.valueOf(levelHeight));
         properties.setProperty("level-length", String.valueOf(levelLength));
+        properties.setProperty("tempadminpass", String.valueOf(tempAdminPass));
         try (FileOutputStream fos = new FileOutputStream(CONFIG_FILE)) {
             properties.store(fos, "Minecraft Classic Server Configuration");
         } catch (IOException e) {
@@ -117,5 +118,9 @@ public class Config {
 
     public int getLevelLength() {
         return levelLength;
+    }
+
+    public String getTempAdminPass() {
+        return tempAdminPass;
     }
 }

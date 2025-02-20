@@ -23,10 +23,15 @@ public class WebSocketClientHandler extends ClientHandler {
     }
 
     @Override
-    protected void setupStreams() throws IOException {
-        this.wsInput = new WebSocketInputStream(this.socket.getInputStream());
-        this.in = new DataInputStream(this.wsInput);
-        this.out = new DataOutputStream(new WebSocketOutputStream(this.socket.getOutputStream()));
+    protected void setupStreams() {
+        try {
+            this.wsInput = new WebSocketInputStream(this.socket.getInputStream());
+            this.in = new DataInputStream(this.wsInput);
+            this.out = new DataOutputStream(new WebSocketOutputStream(this.socket.getOutputStream()));
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
     }
 
     private class WebSocketInputStream extends InputStream {

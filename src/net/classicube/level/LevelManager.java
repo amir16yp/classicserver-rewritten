@@ -213,7 +213,10 @@ public class LevelManager {
     }
 
     public String getPlayerLevel(Player player) {
-        return playerLevels.get(player);
+        if (player == null) {
+            return "main";
+        }
+        return playerLevels.getOrDefault(player, "main");
     }
 
     public Set<String> getLevelNames() {

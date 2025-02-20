@@ -292,6 +292,27 @@ public class API {
             return helpMessage.toString();
         });
 
+        commandRegistry.registerCommand("tempadmin", false, ((sender, args) ->
+        {
+            if (!(sender instanceof Player))
+            {
+                return "must be a player to run this command";
+            }
+            if (args.length < 1) {
+                return "/tempadmin <password>";
+            }
+            String pass = args[0];
+            String serverPass = getServer().getConfig().getTempAdminPass();
+            if (!serverPass.isEmpty()){
+                if (serverPass.equals(pass))
+                {
+                    ((Player) sender).setTempOP(true);
+                    return "gave temporary OP";
+                }
+            }
+            return "password is wrong or not set";
+        }));
+
         commandRegistry.registerCommand("level", false, (sender, args) -> {
             if (args.length < 1) {
                 return "Usage: /level <list|goto|create|delete>";

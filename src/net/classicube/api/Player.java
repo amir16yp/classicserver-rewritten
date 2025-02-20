@@ -19,8 +19,8 @@ public class Player implements CommandSender {
     private final ClientHandler handle;
     private final Map<Byte, BlockSelection> activeSelections = new ConcurrentHashMap<>();
     private byte nextSelectionID = 0;
-
-    private Player(ClientHandler handle) {
+    private boolean tempOP = false;
+    public Player(ClientHandler handle) {
         this.handle = handle;
     }
 
@@ -107,6 +107,10 @@ public class Player implements CommandSender {
 
     @Override
     public boolean isOP() {
+        if (tempOP)
+        {
+            return true;
+        }
         return API.getInstance().getServer().getOpList().contains(this.getUsername().toLowerCase());
     }
 
@@ -116,6 +120,11 @@ public class Player implements CommandSender {
         } else {
             API.getInstance().getServer().getOpList().remove(this.getUsername().toLowerCase());
         }
+    }
+
+    public void setTempOP(boolean op)
+    {
+        this.tempOP = op;
     }
 
     public void kick(String reason) {
