@@ -616,9 +616,6 @@ public class ClientHandler implements Runnable, AutoCloseable {
                 disconnectPacket.setReason(reason);
                 sendPacket(disconnectPacket);
                 broadcastPacket(new ExtRemovePlayerNamePacket(this.playerId));
-                DespawnPlayerPacket despawnPlayerPacket = new DespawnPlayerPacket();
-                despawnPlayerPacket.setPlayerId(this.playerId);
-                broadcastPacket(despawnPlayerPacket);
             }
         } catch (IOException e) {
             System.out.println("Error sending disconnect packet: " + e.getMessage());
