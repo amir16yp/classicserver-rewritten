@@ -377,7 +377,7 @@ public class ClientHandler implements Runnable, AutoCloseable {
         DataOutputStream dos = new DataOutputStream(baos);
         dos.writeInt(levelData.length);
         dos.write(levelData);
-        dos.flush();
+        //dos.flush();
 
         ByteArrayOutputStream compressedBaos = new ByteArrayOutputStream();
         try (GZIPOutputStream gzipOut = new GZIPOutputStream(compressedBaos)) {
